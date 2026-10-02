@@ -11,6 +11,8 @@ build/
 # Dependencies
 node_modules/
 vendor/
+*.timestamp-*.mjs
+
 .venv/
 env/
 __pycache__/
