@@ -89,6 +89,18 @@ services:
     ports:
       - "5173:80"
 
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: logiflows-mobile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5174:80"
+
 volumes:
   postgres_data:
   redis_data:
