@@ -169,7 +169,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, ip, userAgent 
 	var user User
 	var pwdHash string
 	query := `
-	SELECT id, email, password_hash, first_name, last_name, phone, role, is_active, created_at, updated_at
+	SELECT id, email, password_hash, first_name, last_name, COALESCE(phone, ''), role, is_active, created_at, updated_at
 	FROM users WHERE email = $1`
 	err := s.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID, &user.Email, &pwdHash, &user.FirstName, &user.LastName, &user.Phone, &user.Role, &user.IsActive, &user.CreatedAt, &user.UpdatedAt,
@@ -276,7 +276,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshTokenStr string, userID
 func (s *AuthService) GetUserByID(ctx context.Context, userID uuid.UUID) (*User, error) {
 	var user User
 	query := `
-	SELECT id, email, first_name, last_name, phone, role, is_active, created_at, updated_at
+	SELECT id, email, first_name, last_name, COALESCE(phone, ''), role, is_active, created_at, updated_at
 	FROM users WHERE id = $1`
 	err := s.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Phone, &user.Role, &user.IsActive, &user.CreatedAt, &user.UpdatedAt,

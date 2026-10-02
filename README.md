@@ -8,6 +8,7 @@
 
 - **Authoritative Backend:** Go 1.22+ (`backend/`)
   - Authoritative owner of business logic, state machines, RBAC, tenant boundaries, QR custody, and dispatch orchestration.
+  - Interactive **Swagger UI** available at `/swagger` and `/docs`; raw OpenAPI 3.0 specification at `/api/v1/openapi.yaml`.
 - **Transactional & Spatial Database:** PostgreSQL 16 + PostGIS (`backend/internal/migrations/`)
   - Stores all relational entities and geospatial geometries for hub serviceability and GPS telemetry trails.
 - **Transient Real-Time & Caching:** Redis 7 (`backend/internal/database/redis.go`)

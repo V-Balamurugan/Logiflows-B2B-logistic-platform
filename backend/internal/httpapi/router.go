@@ -12,6 +12,7 @@ import (
 	"logiflows/backend/internal/auth"
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
+	"logiflows/backend/internal/swagger"
 )
 
 type ServerDeps struct {
@@ -45,18 +46,30 @@ func BuildRouter(deps ServerDeps) http.Handler {
 	healthHandler := NewHealthHandler(deps.DB, deps.Redis, deps.Config.AIServiceURL, deps.Version)
 	authHandler := NewAuthHandler(deps.AuthService)
 
+	// Interactive Swagger UI & OpenAPI Specification routes
+	r.Get("/swagger", swagger.UIHandler)
+	r.Get("/swagger/*", swagger.UIHandler)
+	r.Get("/docs", swagger.UIHandler)
+	r.Get("/openapi.yaml", swagger.SpecHandler)
+
 	// Base root route
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		RespondJSON(w, r, http.StatusOK, map[string]string{
 			"service":  "LogiFlows Authoritative Backend",
 			"status":   "operational",
 			"version":  deps.Version,
+			"swagger":  "/swagger",
+			"docs":     "/docs",
 			"api_docs": "/api/v1/openapi.yaml",
 		}, nil)
 	})
 
 	// API v1 Namespace
 	r.Route("/api/v1", func(v1 chi.Router) {
+		// OpenAPI Spec & Documentation inside /api/v1
+		v1.Get("/openapi.yaml", swagger.SpecHandler)
+		v1.Get("/docs", swagger.UIHandler)
+		v1.Get("/swagger", swagger.UIHandler)
 		// System Health
 		v1.Get("/healthz", healthHandler.Healthz)
 		v1.Get("/readyz", healthHandler.Readyz)

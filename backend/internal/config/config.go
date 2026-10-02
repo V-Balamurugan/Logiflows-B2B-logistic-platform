@@ -39,7 +39,7 @@ func LoadConfig() (*Config, error) {
 	jwtSecret := getEnv("JWT_SECRET", "default_dev_jwt_secret_must_be_overridden_in_prod")
 	jwtIssuer := getEnv("JWT_ISSUER", "logiflows-auth-service")
 
-	originsStr := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+	originsStr := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174")
 	var origins []string
 	for _, o := range strings.Split(originsStr, ",") {
 		trimmed := strings.TrimSpace(o)
