@@ -1,10 +1,40 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Controlled storage access: only authenticated requests with matching tenant access
-    match /tenants/{tenantId}/pod/{allPaths=**} {
+    // Default deny all access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Proof of delivery uploads (Photos & Signatures)
+    match /proof-of-delivery/{parcelId}/{fileName} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024;
+      allow write: if request.auth != null 
+                   && (request.auth.token.role == 'EMPLOYEE' || request.auth.token.role == 'ADMIN' || request.auth.token.role == 'PLATFORM_ADMIN')
+                   && request.resource.size < 10 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+    }
+
+    // Delivery assignment assets & logs
+    match /deliveries/{assignmentId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null 
+                   && (request.auth.token.role == 'EMPLOYEE' || request.auth.token.role == 'ADMIN')
+                   && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Parcel documents & waybills
+    match /parcels/{parcelId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null 
+                   && (request.auth.token.role == 'ADMIN' || request.auth.token.role == 'TENANT_ADMIN');
+    }
+
+    // Employee verification documents
+    match /employees/{employeeId}/{fileName} {
+      allow read: if request.auth != null && (request.auth.uid == employeeId || request.auth.token.role == 'ADMIN');
+      allow write: if request.auth != null && (request.auth.uid == employeeId || request.auth.token.role == 'ADMIN')
+                   && request.resource.size < 10 * 1024 * 1024;
     }
   }
 }
