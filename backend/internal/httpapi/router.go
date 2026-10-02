@@ -12,18 +12,22 @@ import (
 	"logiflows/backend/internal/auth"
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
+	fb "logiflows/backend/internal/firebase"
 	"logiflows/backend/internal/swagger"
 	"logiflows/backend/internal/tenancy"
+	"logiflows/backend/internal/tracking"
 )
 
 type ServerDeps struct {
-	Config         *config.Config
-	Logger         *slog.Logger
-	DB             *sql.DB
-	Redis          *redis.Client
-	AuthService    *auth.AuthService
-	TenancyService tenancy.Service
-	Version        string
+	Config          *config.Config
+	Logger          *slog.Logger
+	DB              *sql.DB
+	Redis           *redis.Client
+	AuthService     *auth.AuthService
+	TenancyService  tenancy.Service
+	FirebaseService fb.Service
+	TrackingService tracking.Service
+	Version         string
 }
 
 func BuildRouter(deps ServerDeps) http.Handler {
@@ -89,6 +93,20 @@ func BuildRouter(deps ServerDeps) http.Handler {
 		v1.Get("/healthz", healthHandler.Healthz)
 		v1.Get("/readyz", healthHandler.Readyz)
 
+		// Firebase Operational Status
+		v1.Get("/firebase/status", func(w http.ResponseWriter, r *http.Request) {
+			enabled := false
+			if deps.FirebaseService != nil {
+				enabled = deps.FirebaseService.IsAvailable()
+			}
+			RespondJSON(w, r, http.StatusOK, map[string]any{
+				"firebase_enabled": enabled,
+				"project_id":       deps.Config.FirebaseProjectID,
+				"storage_bucket":   deps.Config.FirebaseStorageBucket,
+				"mode":             map[bool]string{true: "LIVE_CLOUD", false: "SIMULATED_MOCK"}[enabled],
+			}, nil)
+		})
+
 		// Foundation API Ping
 		v1.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 			RespondJSON(w, r, http.StatusOK, map[string]string{
@@ -101,6 +119,16 @@ func BuildRouter(deps ServerDeps) http.Handler {
 		if tenancyHandler != nil {
 			v1.Post("/serviceability/check", tenancyHandler.CheckServiceability)
 			v1.Get("/serviceability/check", tenancyHandler.CheckServiceability)
+		}
+
+		// Realtime Delivery Telemetry & WebSocket Tracking
+		if deps.TrackingService != nil {
+			trackingHandler := tracking.NewHandler(deps.TrackingService, deps.Logger)
+			v1.Route("/tracking", func(tr chi.Router) {
+				tr.Post("/location", trackingHandler.UpdateLocation)
+				tr.Get("/location/{assignment_id}", trackingHandler.GetLocation)
+				tr.Get("/ws/{assignment_id}", trackingHandler.StreamWebSocket)
+			})
 		}
 
 		// Public Authentication

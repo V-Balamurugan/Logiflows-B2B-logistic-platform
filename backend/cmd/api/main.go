@@ -13,10 +13,12 @@ import (
 	"logiflows/backend/internal/auth"
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/database"
+	fb "logiflows/backend/internal/firebase"
 	"logiflows/backend/internal/httpapi"
 	"logiflows/backend/internal/logging"
 	"logiflows/backend/internal/migrations"
 	"logiflows/backend/internal/tenancy"
+	"logiflows/backend/internal/tracking"
 )
 
 const AppVersion = "0.2.0-tenants-branches"
@@ -64,15 +66,25 @@ func main() {
 	tenancyRepo := tenancy.NewRepository(db)
 	tenancyService := tenancy.NewService(tenancyRepo, logger)
 
+	// Initialize Firebase Service (Cloud Messaging & Storage)
+	fbCtx, fbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	firebaseService, _ := fb.NewFirebaseService(fbCtx, cfg, logger)
+	fbCancel()
+
+	// Initialize Realtime Delivery Tracking Service
+	trackingService := tracking.NewTrackingService(redisClient, firebaseService, logger)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
-		Config:         cfg,
-		Logger:         logger,
-		DB:             db,
-		Redis:          redisClient,
-		AuthService:    authService,
-		TenancyService: tenancyService,
-		Version:        AppVersion,
+		Config:          cfg,
+		Logger:          logger,
+		DB:              db,
+		Redis:           redisClient,
+		AuthService:     authService,
+		TenancyService:  tenancyService,
+		FirebaseService: firebaseService,
+		TrackingService: trackingService,
+		Version:         AppVersion,
 	})
 
 	server := &http.Server{
