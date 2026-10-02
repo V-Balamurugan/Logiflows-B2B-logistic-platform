@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
@@ -6,9 +7,16 @@ class ApiClient {
   final http.Client client;
 
   ApiClient({
-    this.baseUrl = 'http://10.0.2.2:8080/api/v1',
+    String? baseUrl,
     http.Client? client,
-  }) : client = client ?? http.Client();
+  })  : baseUrl = baseUrl ??
+            const String.fromEnvironment(
+              'API_URL',
+              defaultValue: kIsWeb
+                  ? 'http://localhost:8080/api/v1'
+                  : 'http://10.0.2.2:8080/api/v1',
+            ),
+        client = client ?? http.Client();
 
   Future<Map<String, dynamic>> checkHealth() async {
     try {
