@@ -26,7 +26,7 @@
 | Phase | Description | Status | Branch |
 | :--- | :--- | :--- | :--- |
 | **0** | **Foundation (Core Scaffolds, PostGIS, Health, CI)** | **COMPLETE** | `phase/00-foundation` |
-| **1** | Authentication, Single Portal & RBAC | Planned | `phase/01-auth-rbac` |
+| **1** | **Authentication, Single Portal & RBAC** | **COMPLETE** | `phase/01-auth-rbac` |
 | **2** | Tenants, Branches & Geospatial Serviceability | Planned | `phase/02-tenants-branches` |
 | **3** | Employees, Roles & Vehicles | Planned | `phase/03-employees-vehicles` |
 | **4** | Customers & Parcel Booking | Planned | `phase/04-parcel-booking` |

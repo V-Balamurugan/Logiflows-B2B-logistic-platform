@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: LogiFlows API Gateway
   description: Authoritative REST API for LogiFlows Smart Postal & Courier Delivery Management System
-  version: 0.0.1-foundation
+  version: 0.1.0-auth-rbac
 servers:
   - url: http://localhost:8080/api/v1
     description: Local Development Server
@@ -11,54 +11,121 @@ paths:
   /healthz:
     get:
       summary: Liveness Probe
-      description: Returns process liveness and uptime metrics
       responses:
         '200':
-          description: Service is alive
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+          description: Service is operational
 
   /readyz:
     get:
       summary: Readiness Probe
-      description: Evaluates operational readiness of critical infrastructure dependencies
       responses:
         '200':
-          description: All critical dependencies are operational
+          description: Dependencies are ready
         '503':
-          description: Service is degraded or dependencies unavailable
+          description: Dependencies are degraded
 
   /ping:
     get:
-      summary: Ping Gateway
+      summary: Gateway Ping
       responses:
         '200':
-          description: Successful ping response
+          description: Pong response
+
+  /auth/register:
+    post:
+      summary: Register Customer or Tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, first_name, last_name, role]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                phone:
+                  type: string
+                role:
+                  type: string
+                  enum: [CUSTOMER, TENANT]
+                company_name:
+                  type: string
+      responses:
+        '201':
+          description: Account created successfully
+        '400':
+          description: Invalid request or weak password
+        '409':
+          description: Email already registered
+
+  /auth/login:
+    post:
+      summary: Authenticate User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful authentication with tokens and permissions
+        '401':
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      summary: Rotate Access & Refresh Tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New token pair returned
+        '401':
+          description: Token expired or revoked
+
+  /auth/logout:
+    post:
+      summary: Revoke Refresh Token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/me:
+    get:
+      summary: Current Authenticated User Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile, authoritative role, and permissions returned
 
 components:
-  schemas:
-    SuccessEnvelope:
-      type: object
-      properties:
-        data:
-          type: object
-        meta:
-          type: object
-        request_id:
-          type: string
-    ErrorEnvelope:
-      type: object
-      properties:
-        error:
-          type: object
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            request_id:
-              type: string
-            details:
-              type: object
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
