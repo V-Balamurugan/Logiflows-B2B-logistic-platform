@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"logiflows/backend/internal/auth"
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/database"
 	"logiflows/backend/internal/httpapi"
@@ -17,7 +18,7 @@ import (
 	"logiflows/backend/internal/migrations"
 )
 
-const AppVersion = "0.0.1-foundation"
+const AppVersion = "0.1.0-auth-rbac"
 
 func main() {
 	cfg, err := config.LoadConfig()
@@ -44,7 +45,7 @@ func main() {
 	if err != nil {
 		logger.Error("Failed to initialize database", slog.String("error", err.Error()))
 	} else if db != nil {
-		// Run initial migrations
+		// Run initial and auth migrations
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := migrations.RunMigrations(ctx, db, logger); err != nil {
 			logger.Warn("Auto-migration skipped or encountered error; verify schema", slog.String("error", err.Error()))
@@ -55,13 +56,17 @@ func main() {
 	// Initialize Redis Client
 	redisClient := database.NewRedisClient(cfg, logger)
 
+	// Initialize Core Auth Service
+	authService := auth.NewAuthService(db, cfg, logger)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
-		Config:  cfg,
-		Logger:  logger,
-		DB:      db,
-		Redis:   redisClient,
-		Version: AppVersion,
+		Config:      cfg,
+		Logger:      logger,
+		DB:          db,
+		Redis:       redisClient,
+		AuthService: authService,
+		Version:     AppVersion,
 	})
 
 	server := &http.Server{
