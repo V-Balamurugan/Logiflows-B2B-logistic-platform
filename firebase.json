@@ -1,8 +1,14 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "storage": {
     "rules": "firebase.storage.rules"
   },
   "emulators": {
+    "firestore": {
+      "port": 8085
+    },
     "auth": {
       "port": 9099
     },

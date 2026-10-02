@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.role == 'ADMIN' || request.auth.token.role == 'PLATFORM_ADMIN');
+    }
+
+    function isEmployee() {
+      return isAuthenticated() && (request.auth.token.role == 'EMPLOYEE' || request.auth.token.role == 'TENANT_ADMIN');
+    }
+
+    // User profile mirror
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Hub & Branch status
+    match /branches/{branchId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Parcel tracking live mirror
+    match /parcel_tracking/{parcelId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isEmployee();
+    }
+
+    // Courier GPS location stream
+    match /delivery_locations/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isEmployee() && request.resource.data.employee_id == request.auth.uid);
+    }
+
+    // User notification inbox
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    // Device push tokens
+    match /device_tokens/{tokenId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow write: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // System event stream
+    match /system_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
