@@ -1,0 +1,50 @@
+# Binaries & Build Outputs
+bin/
+dist/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Go
+.go-cache/
+.gocache/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.iml
+
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+service-account*.json
+firebase-adminsdk*.json
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker / Logs
+*.log
+docker/data/
