@@ -16,9 +16,10 @@ import (
 	"logiflows/backend/internal/httpapi"
 	"logiflows/backend/internal/logging"
 	"logiflows/backend/internal/migrations"
+	"logiflows/backend/internal/tenancy"
 )
 
-const AppVersion = "0.1.0-auth-rbac"
+const AppVersion = "0.2.0-tenants-branches"
 
 func main() {
 	cfg, err := config.LoadConfig()
@@ -59,14 +60,19 @@ func main() {
 	// Initialize Core Auth Service
 	authService := auth.NewAuthService(db, cfg, logger)
 
+	// Initialize Tenancy and Geospatial Serviceability Service
+	tenancyRepo := tenancy.NewRepository(db)
+	tenancyService := tenancy.NewService(tenancyRepo, logger)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
-		Config:      cfg,
-		Logger:      logger,
-		DB:          db,
-		Redis:       redisClient,
-		AuthService: authService,
-		Version:     AppVersion,
+		Config:         cfg,
+		Logger:         logger,
+		DB:             db,
+		Redis:          redisClient,
+		AuthService:    authService,
+		TenancyService: tenancyService,
+		Version:        AppVersion,
 	})
 
 	server := &http.Server{

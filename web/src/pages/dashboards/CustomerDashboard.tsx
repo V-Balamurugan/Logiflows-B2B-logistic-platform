@@ -143,6 +143,84 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
             </div>
           </div>
         </div>
+
+        {/* Live Serviceability Inspector Card */}
+        <div className="glass-card rounded-2xl p-6 border border-slate-800">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-white">Courier Network Serviceability Checker</h2>
+              <p className="text-xs text-slate-400">Verify whether our high-speed courier network services your location</p>
+            </div>
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Live PostGIS 16 Query
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              onClick={async () => {
+                const res = await fetch('/api/v1/serviceability/check', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    latitude: 12.9756,
+                    longitude: 77.6066,
+                  }),
+                });
+                const data = await res.json();
+                alert(data.data?.message || 'Check complete');
+              }}
+              className="p-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all"
+            >
+              <div className="font-bold text-xs text-slate-200">Check MG Road / Central Hub</div>
+              <div className="text-[11px] text-slate-400 mt-1">12.9756 N, 77.6066 E</div>
+              <div className="text-[11px] text-emerald-400 font-semibold mt-2">Click to verify coverage</div>
+            </button>
+
+            <button
+              onClick={async () => {
+                const res = await fetch('/api/v1/serviceability/check', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    latitude: 13.0358,
+                    longitude: 77.5970,
+                  }),
+                });
+                const data = await res.json();
+                alert(data.data?.message || 'Check complete');
+              }}
+              className="p-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all"
+            >
+              <div className="font-bold text-xs text-slate-200">Check Hebbal / North DC</div>
+              <div className="text-[11px] text-slate-400 mt-1">13.0358 N, 77.5970 E</div>
+              <div className="text-[11px] text-emerald-400 font-semibold mt-2">Click to verify coverage</div>
+            </button>
+
+            <button
+              onClick={async () => {
+                const res = await fetch('/api/v1/serviceability/check', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    latitude: 12.9345,
+                    longitude: 77.6265,
+                  }),
+                });
+                const data = await res.json();
+                alert(data.data?.message || 'Check complete');
+              }}
+              className="p-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all"
+            >
+              <div className="font-bold text-xs text-slate-200">Check Koramangala / South DC</div>
+              <div className="text-[11px] text-slate-400 mt-1">12.9345 N, 77.6265 E</div>
+              <div className="text-[11px] text-emerald-400 font-semibold mt-2">Click to verify coverage</div>
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   );

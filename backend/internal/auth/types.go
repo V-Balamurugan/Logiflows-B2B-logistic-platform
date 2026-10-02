@@ -71,6 +71,7 @@ var RolePermissions = map[Role][]Permission{
 	RolePlatformAdmin: {
 		PermTenantRead, PermTenantCreate, PermTenantUpdate, PermTenantDisable,
 		PermPlatformAdminCreate, PermTenantAdminCreate, PermEmployeeRead,
+		PermBranchManage,
 		PermParcelRead, PermParcelTrack, PermReportRead, PermAuditRead, PermSystemSettings,
 	},
 	RoleTenant: {

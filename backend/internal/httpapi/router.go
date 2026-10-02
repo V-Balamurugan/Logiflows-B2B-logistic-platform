@@ -13,18 +13,29 @@ import (
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
 	"logiflows/backend/internal/swagger"
+	"logiflows/backend/internal/tenancy"
 )
 
 type ServerDeps struct {
-	Config      *config.Config
-	Logger      *slog.Logger
-	DB          *sql.DB
-	Redis       *redis.Client
-	AuthService *auth.AuthService
-	Version     string
+	Config         *config.Config
+	Logger         *slog.Logger
+	DB             *sql.DB
+	Redis          *redis.Client
+	AuthService    *auth.AuthService
+	TenancyService tenancy.Service
+	Version        string
 }
 
 func BuildRouter(deps ServerDeps) http.Handler {
+	if deps.Logger == nil {
+		deps.Logger = slog.Default()
+	}
+	if deps.Config == nil {
+		deps.Config = &config.Config{
+			JWTSecret: "test_secret_key_at_least_32_bytes_long",
+		}
+	}
+
 	r := chi.NewRouter()
 
 	// Global Core Middlewares
@@ -45,6 +56,10 @@ func BuildRouter(deps ServerDeps) http.Handler {
 
 	healthHandler := NewHealthHandler(deps.DB, deps.Redis, deps.Config.AIServiceURL, deps.Version)
 	authHandler := NewAuthHandler(deps.AuthService)
+	var tenancyHandler *TenancyHandler
+	if deps.TenancyService != nil {
+		tenancyHandler = NewTenancyHandler(deps.TenancyService)
+	}
 
 	// Interactive Swagger UI & OpenAPI Specification routes
 	r.Get("/swagger", swagger.UIHandler)
@@ -82,6 +97,12 @@ func BuildRouter(deps ServerDeps) http.Handler {
 			}, nil)
 		})
 
+		// Public or Authenticated Geospatial Serviceability Check
+		if tenancyHandler != nil {
+			v1.Post("/serviceability/check", tenancyHandler.CheckServiceability)
+			v1.Get("/serviceability/check", tenancyHandler.CheckServiceability)
+		}
+
 		// Public Authentication
 		v1.Route("/auth", func(authRouter chi.Router) {
 			authRouter.Post("/register", authHandler.Register)
@@ -96,7 +117,7 @@ func BuildRouter(deps ServerDeps) http.Handler {
 			})
 		})
 
-		// RBAC and Multi-Tenant Protected Test Verification Endpoints
+		// Protected Operations (RBAC & Tenant Isolation)
 		v1.Group(func(protected chi.Router) {
 			protected.Use(middleware.Authenticate(deps.Config))
 
@@ -114,17 +135,42 @@ func BuildRouter(deps ServerDeps) http.Handler {
 				}, nil)
 			})
 
-			// Endpoint verifying tenant isolation boundary
-			protected.Route("/tenants/{tenant_id}", func(tenantRouter chi.Router) {
-				tenantRouter.Use(middleware.EnforceTenantIsolation("tenant_id"))
-				tenantRouter.Get("/boundary-check", func(w http.ResponseWriter, r *http.Request) {
-					routeTenantID := chi.URLParam(r, "tenant_id")
-					RespondJSON(w, r, http.StatusOK, map[string]string{
-						"message":   "Tenant boundary access verified",
-						"tenant_id": routeTenantID,
-					}, nil)
+			// Tenants & Branches Route Group
+			if tenancyHandler != nil {
+				protected.Route("/tenants", func(tr chi.Router) {
+					// Tenant listing & creation
+					tr.With(middleware.RequireRole(auth.RolePlatformAdmin)).Post("/", tenancyHandler.CreateTenant)
+					tr.With(middleware.RequirePermission(auth.PermTenantRead)).Get("/", tenancyHandler.ListTenants)
+
+					// Scoped to specific tenant
+					tr.Route("/{tenant_id}", func(singleTenant chi.Router) {
+						singleTenant.Use(middleware.EnforceTenantIsolation("tenant_id"))
+						singleTenant.With(middleware.RequirePermission(auth.PermTenantRead)).Get("/", tenancyHandler.GetTenant)
+						singleTenant.With(middleware.RequirePermission(auth.PermTenantUpdate)).Put("/", tenancyHandler.UpdateTenant)
+
+						// Geospatial Coverage GeoJSON FeatureCollection
+						singleTenant.Get("/serviceability/coverage", tenancyHandler.GetCoverage)
+
+						// Branch Management (Strictly Tenant-isolated)
+						singleTenant.Route("/branches", func(br chi.Router) {
+							br.Get("/", tenancyHandler.ListBranches)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Post("/", tenancyHandler.CreateBranch)
+							br.Get("/{branch_id}", tenancyHandler.GetBranch)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Put("/{branch_id}", tenancyHandler.UpdateBranch)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Delete("/{branch_id}", tenancyHandler.DeleteBranch)
+						})
+
+						// Boundary verification
+						singleTenant.Get("/boundary-check", func(w http.ResponseWriter, r *http.Request) {
+							routeTenantID := chi.URLParam(r, "tenant_id")
+							RespondJSON(w, r, http.StatusOK, map[string]string{
+								"message":   "Tenant boundary access verified",
+								"tenant_id": routeTenantID,
+							}, nil)
+						})
+					})
 				})
-			})
+			}
 		})
 	})
 

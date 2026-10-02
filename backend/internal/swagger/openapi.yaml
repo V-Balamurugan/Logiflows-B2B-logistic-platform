@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: LogiFlows API Gateway
   description: Authoritative REST API for LogiFlows Smart Postal & Courier Delivery Management System
-  version: 0.1.0-auth-rbac
+  version: 0.2.0-tenants-branches
 servers:
   - url: /api/v1
     description: Current Server
@@ -16,6 +16,12 @@ tags:
     description: Authoritative user registration, login, token rotation, and identity claims
   - name: RBAC & Tenant Verification
     description: Endpoints demonstrating role-based access control and tenant isolation
+  - name: Tenants
+    description: Multi-tenant enterprise management, branding, and quotas
+  - name: Branches
+    description: Hubs, distribution centers, and local offices management
+  - name: Geospatial Serviceability
+    description: PostGIS point-in-polygon containment and service area coverage
 
 paths:
   /healthz:
@@ -40,65 +46,92 @@ paths:
       description: Checks PostgreSQL database and Redis connectivity
       responses:
         '200':
-          description: All dependencies are healthy
+          description: Service dependencies are ready
         '503':
-          description: One or more dependencies are degraded
+          description: One or more dependencies are unavailable
 
   /ping:
     get:
       tags:
         - System Health
-      summary: Gateway Ping
-      description: Returns simple pong verification message
+      summary: Ping Gateway
       responses:
         '200':
-          description: Pong response
+          description: Gateway is responding
 
-  /auth/register:
+  /serviceability/check:
     post:
       tags:
-        - Authentication
-      summary: Register Customer or Tenant
-      description: Creates a new user account with role CUSTOMER or TENANT
+        - Geospatial Serviceability
+      summary: Check Coordinate Serviceability
+      description: Evaluates whether a coordinate falls inside any active branch service area polygon using PostGIS ST_Contains
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [email, password, first_name, last_name, role]
-              properties:
-                email:
-                  type: string
-                  example: newuser@example.com
-                password:
-                  type: string
-                  example: SecurePass123!
-                first_name:
-                  type: string
-                  example: Alex
-                last_name:
-                  type: string
-                  example: Smith
-                phone:
-                  type: string
-                  example: "+1234567890"
-                role:
-                  type: string
-                  enum: [CUSTOMER, TENANT]
-                  example: CUSTOMER
-                company_name:
-                  type: string
-                  example: Acme Corp
+              $ref: '#/components/schemas/ServiceabilityCheckRequest'
+      responses:
+        '200':
+          description: Serviceability evaluated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceabilityCheckResponse'
+        '400':
+          description: Invalid coordinates or payload
+    get:
+      tags:
+        - Geospatial Serviceability
+      summary: Check Coordinate Serviceability (Query Parameters)
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            example: 12.9716
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+            example: 77.5946
+      responses:
+        '200':
+          description: Serviceability evaluated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceabilityCheckResponse'
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register User
+      description: Registers a new user account with default CUSTOMER role unless specified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Account created successfully
+          description: Registration successful
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
-          description: Invalid request or weak password
+          description: Validation error
         '409':
           description: Email already registered
 
@@ -106,40 +139,29 @@ paths:
     post:
       tags:
         - Authentication
-      summary: Authenticate User
-      description: Authenticates user credentials and returns signed JWT access and refresh tokens
+      summary: User Login
+      description: Authenticates user credentials and issues JWT access token + refresh token
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [email, password]
-              properties:
-                email:
-                  type: string
-                  example: admin@logiflows.io
-                password:
-                  type: string
-                  example: Admin@LogiFlows2026!
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Successful authentication with tokens and permissions
+          description: Login successful
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '401':
-          description: Invalid credentials
-        '403':
-          description: Account inactive
+          description: Invalid email or password
 
   /auth/refresh:
     post:
       tags:
         - Authentication
       summary: Rotate Access & Refresh Tokens
-      description: Issues a new JWT access token using a valid refresh token
       requestBody:
         required: true
         content:
@@ -152,100 +174,280 @@ paths:
                   type: string
       responses:
         '200':
-          description: New token pair returned
+          description: Tokens refreshed successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '401':
-          description: Token expired or revoked
+          description: Invalid or expired refresh token
 
   /auth/logout:
     post:
       tags:
         - Authentication
       summary: Revoke Refresh Token
-      description: Invalidates active refresh token session
       security:
         - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
       responses:
         '200':
-          description: Logged out successfully
+          description: Token revoked successfully
 
   /auth/me:
     get:
       tags:
         - Authentication
-      summary: Current Authenticated User Profile
-      description: Returns identity claims, authoritative role, and permissions for current session
+      summary: Get Current Profile & Permissions
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Profile, authoritative role, and permissions returned
+          description: Current authenticated profile
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserProfileResponse'
+                $ref: '#/components/schemas/MeResponse'
         '401':
           description: Missing or invalid token
 
-  /admin/system-check:
+  /tenants:
+    post:
+      tags:
+        - Tenants
+      summary: Create Tenant
+      description: Restricted to PLATFORM_ADMIN
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+      responses:
+        '201':
+          description: Tenant created successfully
     get:
       tags:
-        - RBAC & Tenant Verification
-      summary: Platform Admin System Check
-      description: Verified endpoint restricted strictly to PLATFORM_ADMIN role
+        - Tenants
+      summary: List Tenants
+      description: Platform Admins list all tenants; tenant users list their own tenant
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Platform admin access granted
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden - Insufficient role permissions
+          description: List of tenants
 
-  /parcels/permission-check:
+  /tenants/{tenant_id}:
     get:
       tags:
-        - RBAC & Tenant Verification
-      summary: Parcel Create Permission Check
-      description: Endpoint requiring specific parcel.create permission
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: User has parcel.create permission
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden - Lacks required permission
-
-  /tenants/{tenant_id}/boundary-check:
-    get:
-      tags:
-        - RBAC & Tenant Verification
-      summary: Tenant Isolation Boundary Check
-      description: Verifies cross-tenant isolation and prevents IDOR leaks
+        - Tenants
+      summary: Get Tenant Details
       security:
         - BearerAuth: []
       parameters:
         - name: tenant_id
           in: path
           required: true
-          description: UUID of the target tenant
           schema:
             type: string
             format: uuid
-            example: "00000000-0000-0000-0000-000000000001"
+      responses:
+        '200':
+          description: Tenant details
+    put:
+      tags:
+        - Tenants
+      summary: Update Tenant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant updated
+
+  /tenants/{tenant_id}/serviceability/coverage:
+    get:
+      tags:
+        - Geospatial Serviceability
+      summary: Get Tenant Coverage GeoJSON
+      description: Returns GeoJSON FeatureCollection of all branch service area polygons
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+
+  /tenants/{tenant_id}/branches:
+    get:
+      tags:
+        - Branches
+      summary: List Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of branches
+    post:
+      tags:
+        - Branches
+      summary: Deploy New Branch
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchCreateRequest'
+      responses:
+        '201':
+          description: Branch created
+
+  /tenants/{tenant_id}/branches/{branch_id}:
+    get:
+      tags:
+        - Branches
+      summary: Get Branch
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Branch details
+    put:
+      tags:
+        - Branches
+      summary: Update Branch
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Branch updated
+    delete:
+      tags:
+        - Branches
+      summary: Delete Branch
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Branch deleted
+
+  /admin/system-check:
+    get:
+      tags:
+        - RBAC & Tenant Verification
+      summary: Platform Admin System Check
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Platform admin access granted
+
+  /parcels/permission-check:
+    get:
+      tags:
+        - RBAC & Tenant Verification
+      summary: Parcel Create Permission Check
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User has parcel.create permission
+
+  /tenants/{tenant_id}/boundary-check:
+    get:
+      tags:
+        - RBAC & Tenant Verification
+      summary: Tenant Isolation Boundary Check
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Tenant boundary access verified
-        '401':
-          description: Unauthorized
-        '403':
-          description: Cross-tenant access forbidden
 
 components:
   securitySchemes:
@@ -253,7 +455,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Enter JWT access token obtained from /api/v1/auth/login
 
   schemas:
     HealthResponse:
@@ -264,17 +465,104 @@ components:
           properties:
             status:
               type: string
-              example: OK
+              example: operational
             version:
               type: string
-              example: 0.1.0-auth-rbac
+              example: 0.2.0-tenants-branches
             uptime_seconds:
-              type: integer
-              example: 120
+              type: number
             timestamp:
               type: string
-              format: date-time
-        request_id:
+
+    ServiceabilityCheckRequest:
+      type: object
+      required: [tenant_id, latitude, longitude]
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+          example: 12.9716
+        longitude:
+          type: number
+          example: 77.5946
+        address:
+          type: string
+          example: "MG Road, Bengaluru"
+
+    ServiceabilityCheckResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            is_serviceable:
+              type: boolean
+            status:
+              type: string
+              example: SERVICEABLE
+            message:
+              type: string
+            matched_branch:
+              $ref: '#/components/schemas/BranchSummary'
+            nearest_branch:
+              $ref: '#/components/schemas/BranchSummary'
+            distance_meters:
+              type: number
+            estimated_eta:
+              type: string
+
+    BranchSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: BLR-HUB-01
+        name:
+          type: string
+          example: Bengaluru Central Sorting Hub
+        branch_type:
+          type: string
+          enum: [SORTING_HUB, DISTRIBUTION_CENTER, LOCAL_OFFICE]
+        address:
+          type: string
+        city:
+          type: string
+        contact_phone:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, MAINTENANCE]
+
+    RegisterRequest:
+      type: object
+      required: [email, password, first_name, last_name]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [PLATFORM_ADMIN, TENANT, TENANT_ADMIN, EMPLOYEE, CUSTOMER]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
           type: string
 
     AuthResponse:
@@ -287,14 +575,8 @@ components:
               $ref: '#/components/schemas/User'
             tokens:
               $ref: '#/components/schemas/TokenPair'
-            permissions:
-              type: array
-              items:
-                type: string
-        request_id:
-          type: string
 
-    UserProfileResponse:
+    MeResponse:
       type: object
       properties:
         data:
@@ -306,8 +588,69 @@ components:
               type: array
               items:
                 type: string
-        request_id:
+
+    TenantCreateRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name:
           type: string
+        code:
+          type: string
+        slug:
+          type: string
+        tier:
+          type: string
+          example: ENTERPRISE
+        quota_parcels_per_day:
+          type: integer
+          example: 50000
+        quota_branches:
+          type: integer
+          example: 100
+
+    BranchCreateRequest:
+      type: object
+      required: [code, name, branch_type, address, location, service_area]
+      properties:
+        code:
+          type: string
+          example: BLR-DC-NORTH
+        name:
+          type: string
+          example: Bengaluru North Distribution Center
+        branch_type:
+          type: string
+          enum: [SORTING_HUB, DISTRIBUTION_CENTER, LOCAL_OFFICE]
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postal_code:
+          type: string
+        contact_phone:
+          type: string
+        contact_email:
+          type: string
+        daily_capacity:
+          type: integer
+          example: 10000
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, MAINTENANCE]
+        location:
+          type: object
+          required: [latitude, longitude]
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+        service_area:
+          type: object
+          description: GeoJSON Polygon
 
     User:
       type: object
