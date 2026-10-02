@@ -32,11 +32,17 @@ __pycache__/
 
 # Environment & Secrets (NEVER COMMIT)
 .env
+*.env
 .env.local
 .env.*.local
 *.pem
 *.key
 service-account*.json
+serviceAccount*.json
+*serviceAccountKey*.json
+serviceAccountKey.json
+firebase-service-account.json
+*-firebase-adminsdk-*.json
 firebase-adminsdk*.json
 
 # OS & IDE

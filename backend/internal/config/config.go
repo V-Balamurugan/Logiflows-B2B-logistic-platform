@@ -22,7 +22,12 @@ type Config struct {
 	JWTSecret         string
 	JWTIssuer         string
 	JWTAccessExpiry   time.Duration
-	AllowedOrigins    []string
+	AllowedOrigins         []string
+	FirebaseProjectID      string
+	FirebaseClientEmail    string
+	FirebasePrivateKey     string
+	FirebaseStorageBucket  string
+	FirebaseCredentialsFile string
 }
 
 func LoadConfig() (*Config, error) {
@@ -61,8 +66,13 @@ func LoadConfig() (*Config, error) {
 		AIServiceURL:      aiURL,
 		JWTSecret:         jwtSecret,
 		JWTIssuer:         jwtIssuer,
-		JWTAccessExpiry:   15 * time.Minute,
-		AllowedOrigins:    origins,
+		JWTAccessExpiry:        15 * time.Minute,
+		AllowedOrigins:         origins,
+		FirebaseProjectID:      getEnv("FIREBASE_PROJECT_ID", ""),
+		FirebaseClientEmail:    getEnv("FIREBASE_CLIENT_EMAIL", ""),
+		FirebasePrivateKey:     getEnv("FIREBASE_PRIVATE_KEY", ""),
+		FirebaseStorageBucket:  getEnv("FIREBASE_STORAGE_BUCKET", ""),
+		FirebaseCredentialsFile: getEnv("GOOGLE_APPLICATION_CREDENTIALS", getEnv("FIREBASE_CREDENTIALS_FILE", "serviceAccountKey.json")),
 	}, nil
 }
 
