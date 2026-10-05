@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: LogiFlows API Gateway
   description: Authoritative REST API for LogiFlows Smart Postal & Courier Delivery Management System
-  version: 0.2.0-tenants-branches
+  version: 0.3.0-fleet-telematics
 servers:
   - url: /api/v1
     description: Current Server
@@ -22,6 +22,12 @@ tags:
     description: Hubs, distribution centers, and local offices management
   - name: Geospatial Serviceability
     description: PostGIS point-in-polygon containment and service area coverage
+  - name: Fleet Management
+    description: Authoritative vehicle inventory, capacity specifications, and lifecycle management
+  - name: Vehicle Telematics
+    description: Real-time GPS and OBD-II telemetry ingestion, latest positions, and breadcrumbs tracking
+  - name: Fleet Maintenance
+    description: Service logs, repair history, and predictive preventative maintenance tracking
 
 paths:
   /healthz:
@@ -449,6 +455,219 @@ paths:
         '200':
           description: Tenant boundary access verified
 
+  /vehicles:
+    get:
+      tags:
+        - Fleet Management
+      summary: List Tenant Fleet Vehicles
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: branch_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AVAILABLE, ON_ROUTE, MAINTENANCE, DECOMMISSIONED]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [VAN, MOTORCYCLE, TRUCK, ELECTRIC_VAN, BICYCLE]
+      responses:
+        '200':
+          description: Vehicles listed successfully
+    post:
+      tags:
+        - Fleet Management
+      summary: Register Fleet Vehicle
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleCreate'
+      responses:
+        '201':
+          description: Vehicle created successfully
+
+  /vehicles/{vehicle_id}:
+    get:
+      tags:
+        - Fleet Management
+      summary: Get Vehicle Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Vehicle details returned
+    put:
+      tags:
+        - Fleet Management
+      summary: Update Vehicle Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Vehicle updated successfully
+    delete:
+      tags:
+        - Fleet Management
+      summary: Delete Vehicle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Vehicle deleted
+
+  /vehicles/{vehicle_id}/telematics:
+    post:
+      tags:
+        - Vehicle Telematics
+      summary: Ingest GPS Telematics Ping
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleTelematicsPing'
+      responses:
+        '201':
+          description: Telematics recorded
+
+  /vehicles/{vehicle_id}/telematics/latest:
+    get:
+      tags:
+        - Vehicle Telematics
+      summary: Get Latest Vehicle Telematics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Latest telemetry returned
+
+  /vehicles/{vehicle_id}/telematics/history:
+    get:
+      tags:
+        - Vehicle Telematics
+      summary: Get Telematics Breadcrumbs History
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Telematics history returned
+
+  /fleet/live:
+    get:
+      tags:
+        - Vehicle Telematics
+      summary: Get Live Fleet Positions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Live fleet positions returned
+
+  /vehicles/{vehicle_id}/maintenance:
+    get:
+      tags:
+        - Fleet Maintenance
+      summary: List Vehicle Maintenance Records
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Maintenance records listed
+    post:
+      tags:
+        - Fleet Maintenance
+      summary: Log Maintenance Intervention
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Maintenance logged
+
+  /fleet/maintenance/upcoming:
+    get:
+      tags:
+        - Fleet Maintenance
+      summary: List Vehicles Due for Maintenance
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Upcoming maintenance list returned
+
 components:
   securitySchemes:
     BearerAuth:
@@ -695,3 +914,294 @@ components:
         token_type:
           type: string
           example: Bearer
+
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        assigned_branch_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_driver_id:
+          type: string
+          format: uuid
+          nullable: true
+        license_plate:
+          type: string
+          example: KA-01-EQ-4091
+        vin:
+          type: string
+          example: MAT90812903X77821
+        make:
+          type: string
+          example: Tata
+        model:
+          type: string
+          example: Ace EV
+        year:
+          type: integer
+          example: 2024
+        vehicle_type:
+          type: string
+          enum: [VAN, MOTORCYCLE, TRUCK, ELECTRIC_VAN, BICYCLE]
+        fuel_type:
+          type: string
+          enum: [DIESEL, PETROL, ELECTRIC, HYBRID]
+        capacity_kg:
+          type: number
+          example: 1000
+        capacity_volume_m3:
+          type: number
+          example: 5.8
+        max_parcels:
+          type: integer
+          example: 80
+        current_mileage_km:
+          type: number
+          example: 1420.5
+        battery_or_fuel_level_percent:
+          type: number
+          example: 92.5
+        status:
+          type: string
+          enum: [AVAILABLE, ON_ROUTE, MAINTENANCE, DECOMMISSIONED]
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    VehicleCreate:
+      type: object
+      required:
+        - license_plate
+        - make
+        - model
+        - year
+        - vehicle_type
+        - fuel_type
+        - capacity_kg
+        - capacity_volume_m3
+        - max_parcels
+      properties:
+        assigned_branch_id:
+          type: string
+          format: uuid
+        assigned_driver_id:
+          type: string
+          format: uuid
+        license_plate:
+          type: string
+          example: KA-01-EQ-4091
+        vin:
+          type: string
+          example: MAT90812903X77821
+        make:
+          type: string
+          example: Tata
+        model:
+          type: string
+          example: Ace EV
+        year:
+          type: integer
+          example: 2024
+        vehicle_type:
+          type: string
+          enum: [VAN, MOTORCYCLE, TRUCK, ELECTRIC_VAN, BICYCLE]
+        fuel_type:
+          type: string
+          enum: [DIESEL, PETROL, ELECTRIC, HYBRID]
+        capacity_kg:
+          type: number
+          example: 1000
+        capacity_volume_m3:
+          type: number
+          example: 5.8
+        max_parcels:
+          type: integer
+          example: 80
+        current_mileage_km:
+          type: number
+          example: 1420.5
+        battery_or_fuel_level_percent:
+          type: number
+          example: 92.5
+        status:
+          type: string
+          enum: [AVAILABLE, ON_ROUTE, MAINTENANCE, DECOMMISSIONED]
+        metadata:
+          type: object
+
+    VehicleTelematicsPing:
+      type: object
+      required:
+        - latitude
+        - longitude
+        - speed_kmh
+        - heading_degrees
+        - battery_or_fuel_percent
+        - odometer_km
+      properties:
+        latitude:
+          type: number
+          example: 12.9716
+        longitude:
+          type: number
+          example: 77.5946
+        speed_kmh:
+          type: number
+          example: 38.5
+        heading_degrees:
+          type: number
+          example: 142.0
+        battery_or_fuel_percent:
+          type: number
+          example: 88.0
+        odometer_km:
+          type: number
+          example: 1450.2
+        recorded_at:
+          type: string
+          format: date-time
+
+    VehicleTelematics:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+        longitude:
+          type: number
+        speed_kmh:
+          type: number
+        heading_degrees:
+          type: number
+        battery_or_fuel_percent:
+          type: number
+        odometer_km:
+          type: number
+        recorded_at:
+          type: string
+          format: date-time
+
+    LiveVehiclePosition:
+      type: object
+      properties:
+        vehicle_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        license_plate:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        vehicle_type:
+          type: string
+          enum: [VAN, MOTORCYCLE, TRUCK, ELECTRIC_VAN, BICYCLE]
+        status:
+          type: string
+          enum: [AVAILABLE, ON_ROUTE, MAINTENANCE, DECOMMISSIONED]
+        assigned_branch_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_driver_id:
+          type: string
+          format: uuid
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        speed_kmh:
+          type: number
+        heading_degrees:
+          type: number
+        battery_or_fuel_percent:
+          type: number
+        odometer_km:
+          type: number
+        last_ping_at:
+          type: string
+          format: date-time
+
+    MaintenanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        service_type:
+          type: string
+          example: BATTERY_CHECK
+        description:
+          type: string
+        cost:
+          type: number
+          example: 4500.00
+        odometer_reading_km:
+          type: number
+          example: 15000.0
+        serviced_at:
+          type: string
+          format: date-time
+        next_service_due_km:
+          type: number
+          nullable: true
+          example: 25000.0
+        created_at:
+          type: string
+          format: date-time
+
+    MaintenanceCreate:
+      type: object
+      required:
+        - service_type
+        - cost
+        - odometer_reading_km
+      properties:
+        service_type:
+          type: string
+          example: BATTERY_CHECK
+        description:
+          type: string
+          example: Scheduled 15,000km state of health inspection
+        cost:
+          type: number
+          example: 4500.00
+        odometer_reading_km:
+          type: number
+          example: 15000.0
+        serviced_at:
+          type: string
+          format: date-time
+        next_service_due_km:
+          type: number
+          example: 25000.0
