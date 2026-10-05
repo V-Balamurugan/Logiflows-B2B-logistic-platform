@@ -60,6 +60,7 @@ const (
 	PermDeliveryUpdate     Permission = "delivery.update"
 	PermBranchManage       Permission = "branch.manage"
 	PermVehicleManage      Permission = "vehicle.manage"
+	PermVehicleRead        Permission = "vehicle.read"
 	PermRouteReview        Permission = "route.review"
 	PermReportRead         Permission = "report.read"
 	PermAuditRead          Permission = "audit.read"
@@ -71,7 +72,7 @@ var RolePermissions = map[Role][]Permission{
 	RolePlatformAdmin: {
 		PermTenantRead, PermTenantCreate, PermTenantUpdate, PermTenantDisable,
 		PermPlatformAdminCreate, PermTenantAdminCreate, PermEmployeeRead,
-		PermBranchManage,
+		PermBranchManage, PermVehicleManage, PermVehicleRead,
 		PermParcelRead, PermParcelTrack, PermReportRead, PermAuditRead, PermSystemSettings,
 	},
 	RoleTenant: {
@@ -79,7 +80,7 @@ var RolePermissions = map[Role][]Permission{
 		PermCustomerCreate, PermCustomerRead, PermCustomerUpdate,
 		PermParcelCreate, PermParcelRead, PermParcelUpdate, PermParcelCancel, PermParcelTrack,
 		PermParcelQRGenerate, PermParcelQRDownload, PermCustodyRead,
-		PermDeliveryAssign, PermDeliveryUpdate, PermBranchManage, PermVehicleManage,
+		PermDeliveryAssign, PermDeliveryUpdate, PermBranchManage, PermVehicleManage, PermVehicleRead,
 		PermRouteReview, PermReportRead, PermAuditRead,
 	},
 	RoleTenantAdmin: {
@@ -87,12 +88,13 @@ var RolePermissions = map[Role][]Permission{
 		PermCustomerCreate, PermCustomerRead, PermCustomerUpdate,
 		PermParcelCreate, PermParcelRead, PermParcelUpdate, PermParcelCancel, PermParcelTrack,
 		PermParcelQRGenerate, PermParcelQRDownload, PermCustodyRead, PermCustodyCreate,
-		PermDeliveryAssign, PermDeliveryUpdate, PermBranchManage, PermVehicleManage,
+		PermDeliveryAssign, PermDeliveryUpdate, PermBranchManage, PermVehicleManage, PermVehicleRead,
 		PermRouteReview, PermReportRead,
 	},
 	RoleEmployee: {
 		PermParcelRead, PermParcelTrack, PermParcelQRGenerate, PermParcelQRDownload,
 		PermCustodyRead, PermCustodyCreate, PermDeliveryUpdate, PermRouteReview,
+		PermVehicleRead,
 	},
 	RoleCustomer: {
 		PermCustomerRead, PermCustomerUpdate,

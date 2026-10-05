@@ -13,6 +13,7 @@ import (
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
 	fb "logiflows/backend/internal/firebase"
+	"logiflows/backend/internal/fleet"
 	"logiflows/backend/internal/routing"
 	"logiflows/backend/internal/swagger"
 	"logiflows/backend/internal/tenancy"
@@ -26,6 +27,7 @@ type ServerDeps struct {
 	Redis           *redis.Client
 	AuthService     *auth.AuthService
 	TenancyService  tenancy.Service
+	FleetService    fleet.Service
 	FirebaseService fb.Service
 	TrackingService tracking.Service
 	RoutingService  routing.Service
@@ -65,6 +67,10 @@ func BuildRouter(deps ServerDeps) http.Handler {
 	var tenancyHandler *TenancyHandler
 	if deps.TenancyService != nil {
 		tenancyHandler = NewTenancyHandler(deps.TenancyService)
+	}
+	var fleetHandler *FleetHandler
+	if deps.FleetService != nil {
+		fleetHandler = NewFleetHandler(deps.FleetService)
 	}
 
 	// Interactive Swagger UI & OpenAPI Specification routes
@@ -216,7 +222,55 @@ func BuildRouter(deps ServerDeps) http.Handler {
 								"tenant_id": routeTenantID,
 							}, nil)
 						})
+
+						// Fleet Management & Vehicle Telematics (Strictly Tenant-isolated)
+						if fleetHandler != nil {
+							singleTenant.Route("/vehicles", func(vr chi.Router) {
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/", fleetHandler.ListVehicles)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/", fleetHandler.CreateVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}", fleetHandler.GetVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Put("/{vehicle_id}", fleetHandler.UpdateVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Delete("/{vehicle_id}", fleetHandler.DeleteVehicle)
+
+								// Telematics & GPS breadcrumbs
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/telematics", fleetHandler.IngestTelematics)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/latest", fleetHandler.GetLatestTelematics)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/history", fleetHandler.GetTelematicsHistory)
+
+								// Maintenance
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/maintenance", fleetHandler.CreateMaintenance)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/maintenance", fleetHandler.ListMaintenance)
+							})
+
+							singleTenant.Route("/fleet", func(fr chi.Router) {
+								fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/live", fleetHandler.GetLiveFleetPositions)
+								fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/maintenance/upcoming", fleetHandler.ListUpcomingMaintenance)
+							})
+						}
 					})
+				})
+			}
+
+			// Convenient Top-Level Fleet Endpoints (tenant_id inferred from JWT claims/context)
+			if fleetHandler != nil {
+				protected.Route("/vehicles", func(vr chi.Router) {
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/", fleetHandler.ListVehicles)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/", fleetHandler.CreateVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}", fleetHandler.GetVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Put("/{vehicle_id}", fleetHandler.UpdateVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Delete("/{vehicle_id}", fleetHandler.DeleteVehicle)
+
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/telematics", fleetHandler.IngestTelematics)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/latest", fleetHandler.GetLatestTelematics)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/history", fleetHandler.GetTelematicsHistory)
+
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/maintenance", fleetHandler.CreateMaintenance)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/maintenance", fleetHandler.ListMaintenance)
+				})
+
+				protected.Route("/fleet", func(fr chi.Router) {
+					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/live", fleetHandler.GetLiveFleetPositions)
+					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/maintenance/upcoming", fleetHandler.ListUpcomingMaintenance)
 				})
 			}
 		})
