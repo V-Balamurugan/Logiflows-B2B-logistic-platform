@@ -74,7 +74,7 @@ func LoadConfig() (*Config, error) {
 		FirebasePrivateKey:     getEnv("FIREBASE_PRIVATE_KEY", ""),
 		FirebaseStorageBucket:  getEnv("FIREBASE_STORAGE_BUCKET", ""),
 		FirebaseCredentialsFile: getEnv("GOOGLE_APPLICATION_CREDENTIALS", getEnv("FIREBASE_CREDENTIALS_FILE", "serviceAccountKey.json")),
-		RoutingAPIKey:          getEnv("ROUTING_API_KEY", ""),
+		RoutingAPIKey:          strings.Trim(strings.TrimSpace(getEnv("ORS_API_KEY", getEnv("ROUTING_API_KEY", getEnv("OPENROUTESERVICE_API_KEY", "")))), "\"'"),
 	}, nil
 }
 

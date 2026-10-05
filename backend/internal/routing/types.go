@@ -51,9 +51,11 @@ type MatrixResponse struct {
 
 // StatusResponse describes the routing engine readiness and API key state.
 type StatusResponse struct {
-	Status     string `json:"status"`
-	Provider   string `json:"provider"`
-	HasAPIKey  bool   `json:"has_api_key"`
-	KeyPreview string `json:"key_preview,omitempty"`
-	Mode       string `json:"mode"` // LIVE_CLOUD or SIMULATED_FALLBACK
+	Status       string `json:"status"`
+	Provider     string `json:"provider"`
+	HasAPIKey    bool   `json:"has_api_key"`
+	KeyPreview   string `json:"key_preview,omitempty"`
+	KeyStatus    string `json:"key_status,omitempty"` // VALID, INVALID, UNVERIFIED, NOT_CONFIGURED
+	Mode         string `json:"mode"`       // LIVE_CLOUD or SIMULATED_FALLBACK
+	ErrorMessage string `json:"error_message,omitempty"`
 }
