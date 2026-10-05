@@ -53,6 +53,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-replace_with_super_secret_jwt_key_at_least_32_characters_long}
       JWT_ISSUER: logiflows-auth-service
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174}
+      ROUTING_API_KEY: ${ROUTING_API_KEY:-${ORS_API_KEY:-}}
+      ORS_API_KEY: ${ORS_API_KEY:-${ROUTING_API_KEY:-}}
     ports:
       - "8080:8080"
     healthcheck:

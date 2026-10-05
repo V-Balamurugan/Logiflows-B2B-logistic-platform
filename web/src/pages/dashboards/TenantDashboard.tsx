@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { Branch } from '../../types/tenancy';
 import { GeospatialMap } from '../../components/GeospatialMap';
+import { FleetManagementView } from '../../components/FleetManagementView';
 import { DashboardLayout } from '../../components/DashboardLayout';
 
 interface TenantDashboardProps {
@@ -190,6 +191,23 @@ export const TenantDashboard: React.FC<TenantDashboardProps> = ({ onNavigate }) 
               </div>
             </div>
             <GeospatialMap tenantId={tenantId} branches={branches} />
+          </div>
+        )}
+
+        {/* Fleet & Telematics Management */}
+        {(activeNav === 'Fleet' || activeNav === 'Overview') && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Fleet & Vehicle Telematics Operations</h2>
+                <p className="text-xs text-slate-400">Live GPS tracking, road speed, energy levels, and maintenance telemetry</p>
+              </div>
+            </div>
+            <FleetManagementView
+              token={localStorage.getItem('access_token') || ''}
+              tenantId={tenantId}
+              branches={branches}
+            />
           </div>
         )}
 

@@ -14,6 +14,7 @@ import (
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/database"
 	fb "logiflows/backend/internal/firebase"
+	"logiflows/backend/internal/fleet"
 	"logiflows/backend/internal/httpapi"
 	"logiflows/backend/internal/logging"
 	"logiflows/backend/internal/migrations"
@@ -22,7 +23,7 @@ import (
 	"logiflows/backend/internal/tracking"
 )
 
-const AppVersion = "0.2.0-tenants-branches"
+const AppVersion = "0.3.0-fleet-telematics"
 
 func main() {
 	cfg, err := config.LoadConfig()
@@ -78,6 +79,10 @@ func main() {
 	// Initialize Authoritative Routing & Geocoding Service (OpenRouteService / PostGIS)
 	routingService := routing.NewRoutingService(cfg, logger)
 
+	// Initialize Authoritative Fleet & Telematics Service
+	fleetRepo := fleet.NewPostgresRepository(db)
+	fleetService := fleet.NewService(fleetRepo, logger)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
 		Config:          cfg,
@@ -86,6 +91,7 @@ func main() {
 		Redis:           redisClient,
 		AuthService:     authService,
 		TenancyService:  tenancyService,
+		FleetService:    fleetService,
 		FirebaseService: firebaseService,
 		TrackingService: trackingService,
 		RoutingService:  routingService,

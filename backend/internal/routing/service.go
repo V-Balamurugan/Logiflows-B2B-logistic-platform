@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"logiflows/backend/internal/config"
@@ -24,9 +25,13 @@ type Service interface {
 
 // Client implements the routing Service.
 type Client struct {
-	apiKey     string
-	httpClient *http.Client
-	logger     *slog.Logger
+	apiKey        string
+	httpClient    *http.Client
+	logger        *slog.Logger
+	mu            sync.RWMutex
+	lastErrReason string
+	keyValidated  bool
+	keyValid      bool
 }
 
 // NewRoutingService creates an authoritative routing service instance.
@@ -35,7 +40,7 @@ func NewRoutingService(cfg *config.Config, logger *slog.Logger) Service {
 		logger = slog.Default()
 	}
 
-	apiKey := strings.TrimSpace(cfg.RoutingAPIKey)
+	apiKey := strings.Trim(strings.TrimSpace(cfg.RoutingAPIKey), "\"'")
 	return &Client{
 		apiKey: apiKey,
 		httpClient: &http.Client{
@@ -46,10 +51,28 @@ func NewRoutingService(cfg *config.Config, logger *slog.Logger) Service {
 }
 
 func (c *Client) GetStatus() StatusResponse {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	hasKey := c.apiKey != ""
 	mode := "SIMULATED_FALLBACK"
+	keyStatus := "NOT_CONFIGURED"
+	status := "OPERATIONAL"
+
 	if hasKey {
-		mode = "LIVE_CLOUD"
+		if c.keyValidated {
+			if c.keyValid {
+				mode = "LIVE_CLOUD"
+				keyStatus = "VALID"
+			} else {
+				mode = "SIMULATED_FALLBACK"
+				keyStatus = "INVALID"
+				status = "API_KEY_INVALID"
+			}
+		} else {
+			mode = "LIVE_CLOUD"
+			keyStatus = "CONFIGURED"
+		}
 	}
 
 	var preview string
@@ -60,11 +83,13 @@ func (c *Client) GetStatus() StatusResponse {
 	}
 
 	return StatusResponse{
-		Status:     "OPERATIONAL",
-		Provider:   "OpenRouteService",
-		HasAPIKey:  hasKey,
-		KeyPreview: preview,
-		Mode:       mode,
+		Status:       status,
+		Provider:     "OpenRouteService",
+		HasAPIKey:    hasKey,
+		KeyPreview:   preview,
+		KeyStatus:    keyStatus,
+		Mode:         mode,
+		ErrorMessage: c.lastErrReason,
 	}
 }
 
@@ -76,13 +101,19 @@ func (c *Client) GetDirections(ctx context.Context, req RouteRequest) (*RouteRes
 		if err == nil && resp != nil {
 			return resp, nil
 		}
-		c.logger.Warn("OpenRouteService API call failed; falling back to simulated road geometry",
+		c.logger.Warn("OpenRouteService API call failed; seamlessly using high-fidelity simulated road network",
 			slog.String("error", err.Error()),
 		)
 	}
 
 	// Graceful high-fidelity fallback
-	return c.generateSimulatedRoute(req), nil
+	simRoute := c.generateSimulatedRoute(req)
+	c.mu.RLock()
+	if c.apiKey != "" && c.keyValidated && !c.keyValid {
+		simRoute.Provider = "OpenRouteService (Simulated - API Key Not Valid)"
+	}
+	c.mu.RUnlock()
+	return simRoute, nil
 }
 
 // GetMatrix computes pairwise travel distance and duration.
@@ -177,8 +208,25 @@ func (c *Client) callOpenRouteService(ctx context.Context, req RouteRequest) (*R
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
+		if httpResp.StatusCode == http.StatusUnauthorized || httpResp.StatusCode == http.StatusForbidden {
+			c.mu.Lock()
+			c.keyValid = false
+			c.keyValidated = true
+			c.lastErrReason = fmt.Sprintf("API key not valid or unauthorized (HTTP %d)", httpResp.StatusCode)
+			c.mu.Unlock()
+			return nil, fmt.Errorf("api key not valid (HTTP %d): %s", httpResp.StatusCode, string(bodyBytes))
+		}
+		c.mu.Lock()
+		c.lastErrReason = fmt.Sprintf("OpenRouteService request error (HTTP %d)", httpResp.StatusCode)
+		c.mu.Unlock()
 		return nil, fmt.Errorf("openrouteservice returned status %d: %s", httpResp.StatusCode, string(bodyBytes))
 	}
+
+	c.mu.Lock()
+	c.keyValid = true
+	c.keyValidated = true
+	c.lastErrReason = ""
+	c.mu.Unlock()
 
 	var orsResp struct {
 		Features []struct {

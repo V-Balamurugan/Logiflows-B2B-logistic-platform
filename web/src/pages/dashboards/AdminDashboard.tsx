@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, Users, FileText, Lock, AlertTriangle,
   TrendingUp, Server, CheckCircle2, XCircle, Activity, Globe,
-  MoreHorizontal, Eye, Ban, RefreshCw, Flame, Route as RouteIcon, Radio, Zap
+  MoreHorizontal, Eye, Ban, RefreshCw, Flame, Route as RouteIcon, Radio, Zap, Truck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/DashboardLayout';
 import { getFirebaseStatus, FirebaseOperationalStatus } from '../../services/firebaseService';
 import { getRoutingStatus, getDirections, RoutingStatus, RouteResult } from '../../services/routingService';
+import { FleetManagementView } from '../../components/FleetManagementView';
 
 interface AdminDashboardProps {
   onNavigate: (path: string) => void;
@@ -15,6 +16,7 @@ interface AdminDashboardProps {
 
 const NAV = [
   { icon: <Activity className="w-4 h-4" />, label: 'Overview' },
+  { icon: <Truck className="w-4 h-4" />, label: 'Fleet Telematics' },
   { icon: <Building2 className="w-4 h-4" />, label: 'Tenants', badge: 12 },
   { icon: <Users className="w-4 h-4" />, label: 'Users', badge: '1.4k' },
   { icon: <Lock className="w-4 h-4" />, label: 'RBAC Rules' },
@@ -467,6 +469,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             </div>
           ))}
         </div>
+
+        {/* Fleet & Telematics Management */}
+        {activeNav === 'Fleet Telematics' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Cross-Tenant Fleet & Telematics Overview</h2>
+                <p className="text-xs text-slate-400">Platform-wide vehicle telematics and fleet tracking operations</p>
+              </div>
+            </div>
+            <FleetManagementView
+              token={localStorage.getItem('access_token') || ''}
+              branches={[]}
+            />
+          </div>
+        )}
 
       </div>
     </DashboardLayout>
