@@ -17,6 +17,7 @@ import (
 	"logiflows/backend/internal/httpapi"
 	"logiflows/backend/internal/logging"
 	"logiflows/backend/internal/migrations"
+	"logiflows/backend/internal/routing"
 	"logiflows/backend/internal/tenancy"
 	"logiflows/backend/internal/tracking"
 )
@@ -74,6 +75,9 @@ func main() {
 	// Initialize Realtime Delivery Tracking Service
 	trackingService := tracking.NewTrackingService(redisClient, firebaseService, logger)
 
+	// Initialize Authoritative Routing & Geocoding Service (OpenRouteService / PostGIS)
+	routingService := routing.NewRoutingService(cfg, logger)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
 		Config:          cfg,
@@ -84,6 +88,7 @@ func main() {
 		TenancyService:  tenancyService,
 		FirebaseService: firebaseService,
 		TrackingService: trackingService,
+		RoutingService:  routingService,
 		Version:         AppVersion,
 	})
 

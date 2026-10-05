@@ -45,6 +45,12 @@ func (h *Handler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate GPS coordinates: latitude [-90, 90], longitude [-180, 180]
+	if payload.Latitude < -90.0 || payload.Latitude > 90.0 || payload.Longitude < -180.0 || payload.Longitude > 180.0 {
+		http.Error(w, `{"error":{"message":"Invalid GPS coordinates: latitude must be between -90 and 90, longitude between -180 and 180"}}`, http.StatusBadRequest)
+		return
+	}
+
 	if err := h.service.RecordLocation(r.Context(), payload); err != nil {
 		h.logger.Error("Failed to record location update", slog.String("error", err.Error()))
 		http.Error(w, `{"error":{"message":"Failed to record location"}}`, http.StatusInternalServerError)

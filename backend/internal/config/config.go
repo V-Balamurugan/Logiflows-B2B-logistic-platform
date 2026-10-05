@@ -28,6 +28,7 @@ type Config struct {
 	FirebasePrivateKey     string
 	FirebaseStorageBucket  string
 	FirebaseCredentialsFile string
+	RoutingAPIKey          string
 }
 
 func LoadConfig() (*Config, error) {
@@ -73,6 +74,7 @@ func LoadConfig() (*Config, error) {
 		FirebasePrivateKey:     getEnv("FIREBASE_PRIVATE_KEY", ""),
 		FirebaseStorageBucket:  getEnv("FIREBASE_STORAGE_BUCKET", ""),
 		FirebaseCredentialsFile: getEnv("GOOGLE_APPLICATION_CREDENTIALS", getEnv("FIREBASE_CREDENTIALS_FILE", "serviceAccountKey.json")),
+		RoutingAPIKey:          getEnv("ROUTING_API_KEY", ""),
 	}, nil
 }
 

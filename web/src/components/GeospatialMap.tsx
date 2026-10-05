@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Navigation, CheckCircle2, XCircle, Clock, Building2, Search, Crosshair } from 'lucide-react';
+import { Navigation, CheckCircle2, XCircle, Clock, Building2, Search, Crosshair, Route as RouteIcon } from 'lucide-react';
 import { Branch, ServiceabilityCheckResponse } from '../types/tenancy';
+import { getDirections, RouteResult } from '../services/routingService';
 
 interface GeospatialMapProps {
   tenantId: string;
@@ -16,16 +17,19 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({ tenantId, branches
     markers: L.LayerGroup;
     polygons: L.LayerGroup;
     targetMarker: L.Marker | null;
+    routePolyline: L.Polyline | null;
   }>({
     markers: L.layerGroup(),
     polygons: L.layerGroup(),
     targetMarker: null,
+    routePolyline: null,
   });
 
   const [testLat, setTestLat] = useState<string>('12.9756');
   const [testLon, setTestLon] = useState<string>('77.6066');
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [result, setResult] = useState<ServiceabilityCheckResponse | null>(null);
+  const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
 
   // Initialize Map
@@ -182,6 +186,36 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({ tenantId, branches
       const json = await res.json();
       if (res.ok) {
         setResult(json.data);
+
+        // Fetch authoritative driving route between hub and target
+        const branchPoint = json.data.matched_branch || json.data.nearest_branch;
+        if (branchPoint) {
+          const route = await getDirections(
+            { latitude: branchPoint.location.latitude, longitude: branchPoint.location.longitude },
+            { latitude: lat, longitude: lon }
+          );
+          setActiveRoute(route);
+
+          if (map) {
+            if (layersRef.current.routePolyline) {
+              map.removeLayer(layersRef.current.routePolyline);
+            }
+            const isServiceable = json.data.is_serviceable;
+            const polyline = L.polyline(route.geometry, {
+              color: isServiceable ? '#38bdf8' : '#f43f5e',
+              weight: 4,
+              opacity: 0.85,
+              dashArray: isServiceable ? undefined : '6, 8',
+            }).addTo(map);
+
+            polyline.bindTooltip(
+              `<b>${isServiceable ? 'Express Transit Route' : 'Out-of-Area Route'}</b><br/>${route.distance_km} km • ${route.eta_formatted}`,
+              { sticky: true }
+            );
+
+            layersRef.current.routePolyline = polyline;
+          }
+        }
       } else {
         setResult({
           is_serviceable: false,
@@ -436,6 +470,34 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({ tenantId, branches
                     <div className="text-slate-300">
                       <span className="text-slate-400">Proximity:</span>{' '}
                       <b className="text-white">{(result.distance_meters / 1000).toFixed(2)} km away</b>
+                    </div>
+                  </div>
+                )}
+
+                {/* Authoritative Route Calculation Details */}
+                {activeRoute && (
+                  <div className="mt-3 pt-3 border-t border-slate-700/60 bg-slate-900/60 p-2.5 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-semibold">
+                      <span className="flex items-center gap-1.5 text-sky-300">
+                        <RouteIcon className="w-3.5 h-3.5" />
+                        Driving Route Geometry
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800">
+                        {activeRoute.source === 'LIVE_OPENROUTESERVICE' ? 'Live ORS' : 'Spatial Engine'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Road Distance:</span>{' '}
+                        <b className="text-slate-100">{activeRoute.distance_km} km</b>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Est. Driving ETA:</span>{' '}
+                        <b className="text-emerald-400">{activeRoute.eta_formatted}</b>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      Provider: <span className="text-slate-300">{activeRoute.provider}</span>
                     </div>
                   </div>
                 )}

@@ -30,8 +30,8 @@
 
 ---
 
-## 3. Storage Rule Boundaries
+## 3. Media Storage Boundaries (Cloudinary Architecture)
 
-- Default rule: **Deny All**.
-- Proof of Delivery (`proof-of-delivery/{parcelId}/{fileName}`): Restricted to authenticated couriers and admins, maximum file size 10MB, strictly validated MIME types (`image/*`, `application/pdf`).
-- Unauthenticated or public write access is strictly prohibited across all bucket paths.
+- **Cloudinary Mandate**: In LogiFlows, all customer Proof of Delivery (POD) photos, recipient signatures, and delivery documents are stored in Cloudinary.
+- **No Binary Media in Firestore**: Cloud Firestore stores only structured metadata records containing the signed Cloudinary URL and public ID.
+- **Firebase Storage Isolation**: If Firebase Storage is present in the Firebase project, its rules default to strict deny-all to ensure all file traffic is directed through Cloudinary.

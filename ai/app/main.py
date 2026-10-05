@@ -31,6 +31,7 @@ async def add_process_time_header(request: Request, call_next):
 app.include_router(health.router, tags=["Health"])
 app.include_router(predict.router, prefix="/api/v1/predict", tags=["Prediction"])
 app.include_router(firebase.router, prefix="/api/v1", tags=["Firebase Services"])
+app.include_router(firebase.router, prefix="/api", tags=["Firebase Services (Direct)"])
 
 @app.get("/")
 def root():

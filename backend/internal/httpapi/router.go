@@ -13,6 +13,7 @@ import (
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
 	fb "logiflows/backend/internal/firebase"
+	"logiflows/backend/internal/routing"
 	"logiflows/backend/internal/swagger"
 	"logiflows/backend/internal/tenancy"
 	"logiflows/backend/internal/tracking"
@@ -27,6 +28,7 @@ type ServerDeps struct {
 	TenancyService  tenancy.Service
 	FirebaseService fb.Service
 	TrackingService tracking.Service
+	RoutingService  routing.Service
 	Version         string
 }
 
@@ -106,6 +108,24 @@ func BuildRouter(deps ServerDeps) http.Handler {
 				"mode":             map[bool]string{true: "LIVE_CLOUD", false: "SIMULATED_MOCK"}[enabled],
 			}, nil)
 		})
+
+		// Firebase Client Public Config
+		v1.Get("/firebase/config", func(w http.ResponseWriter, r *http.Request) {
+			RespondJSON(w, r, http.StatusOK, map[string]string{
+				"project_id":     deps.Config.FirebaseProjectID,
+				"storage_bucket": deps.Config.FirebaseStorageBucket,
+			}, nil)
+		})
+
+		// Routing & Direction Engine (OpenRouteService / PostGIS)
+		if deps.RoutingService != nil {
+			routingHandler := routing.NewHandler(deps.RoutingService, RespondJSON, RespondError)
+			v1.Route("/routing", func(rtr chi.Router) {
+				rtr.Get("/status", routingHandler.GetStatus)
+				rtr.Post("/directions", routingHandler.CalculateDirections)
+				rtr.Post("/matrix", routingHandler.CalculateMatrix)
+			})
+		}
 
 		// Foundation API Ping
 		v1.Get("/ping", func(w http.ResponseWriter, r *http.Request) {

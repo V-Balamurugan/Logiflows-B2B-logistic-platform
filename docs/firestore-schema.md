@@ -47,19 +47,33 @@ Public/Customer-facing tracking checkpoint trail:
 }
 ```
 
-### 4. `device_tokens/{uid_platform}`
+### 4. `notifications/{notification_id}`
+In-app notifications feed for couriers, dispatchers, and customers:
+```json
+{
+  "notification_id": "notif_8f3a92c10b",
+  "user_id": "6cce643f-0323-413e-939d-344c7ba27649",
+  "title": "Parcel Assigned",
+  "message": "Parcel LF10001 has been assigned to you.",
+  "type": "DELIVERY_ASSIGNMENT",
+  "read": false,
+  "created_at": "2026-10-02T15:05:00Z"
+}
+```
+
+### 5. `device_tokens/{token_id}`
 FCM push notification tokens mapped to users:
 ```json
 {
   "user_id": "6cce643f-0323-413e-939d-344c7ba27649",
-  "device_token": "fcm_token_string_here",
+  "token": "fcm_token_string_here",
   "platform": "android",
   "active": true,
   "updated_at": "2026-10-02T15:00:00Z"
 }
 ```
 
-### 5. `system_events/{event_id}`
+### 6. `system_events/{event_id}`
 Audit events published upon assignment and custody shifts:
 ```json
 {

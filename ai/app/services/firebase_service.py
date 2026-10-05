@@ -127,9 +127,57 @@ class FirebaseService:
                     items = [it for it in items if it.get(field) == val]
         return items[:limit]
 
+    @staticmethod
+    def set_document(collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        return FirebaseService.create_document(collection, doc_id, data)
+
+    @staticmethod
+    def add_document(collection: str, data: Dict[str, Any]) -> str:
+        import uuid
+        doc_id = str(uuid.uuid4())
+        FirebaseService.create_document(collection, doc_id, data)
+        return doc_id
+
     # -------------------------------------------------------------------------
-    # Real-Time Telemetry & Tracking Mirror
+    # Specialized Real-Time State & Operational Methods
     # -------------------------------------------------------------------------
+    @classmethod
+    def update_parcel_realtime_state(
+        cls,
+        parcel_id: str,
+        status: str,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        employee_id: Optional[str] = None,
+        assignment_id: Optional[str] = None,
+        eta: Optional[str] = None,
+        checkpoint_description: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "parcel_id": parcel_id,
+            "status": status,
+            "current_status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if latitude is not None and longitude is not None:
+            payload["latitude"] = latitude
+            payload["longitude"] = longitude
+        if employee_id is not None:
+            payload["employee_id"] = employee_id
+        if assignment_id is not None:
+            payload["assignment_id"] = assignment_id
+        if eta is not None:
+            payload["eta"] = eta
+        if checkpoint_description is not None:
+            payload["last_checkpoint"] = checkpoint_description
+
+        # Merge with existing document if present
+        existing = cls.get_document("parcel_tracking", str(parcel_id))
+        if existing:
+            existing.update(payload)
+            return cls.update_document("parcel_tracking", str(parcel_id), existing)
+        return cls.create_document("parcel_tracking", str(parcel_id), payload)
+
     @classmethod
     def update_delivery_location(
         cls,
@@ -141,35 +189,81 @@ class FirebaseService:
         heading: float = 0.0,
     ) -> Dict[str, Any]:
         payload = {
-            "assignment_id": assignment_id,
-            "employee_id": employee_id,
-            "latitude": latitude,
-            "longitude": longitude,
-            "speed": speed,
-            "heading": heading,
+            "assignment_id": str(assignment_id),
+            "employee_id": str(employee_id),
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+            "speed": float(speed),
+            "heading": float(heading),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return cls.create_document("delivery_locations", str(assignment_id), payload)
 
     @classmethod
-    def publish_system_event(
+    def create_notification(
+        cls,
+        user_id: str,
+        title: str,
+        message: str,
+        notification_type: str = "SYSTEM_ALERT",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        import uuid
+        notification_id = f"notif_{uuid.uuid4().hex[:12]}"
+        payload = {
+            "notification_id": notification_id,
+            "user_id": str(user_id),
+            "title": title,
+            "message": message,
+            "type": notification_type,
+            "read": False,
+            "metadata": metadata or {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        return cls.create_document("notifications", notification_id, payload)
+
+    @classmethod
+    def register_device_token(
+        cls,
+        user_id: str,
+        token: str,
+        platform: str = "android",
+    ) -> Dict[str, Any]:
+        doc_id = f"{user_id}_{platform}"
+        payload = {
+            "user_id": str(user_id),
+            "token": token,
+            "device_token": token,
+            "platform": platform,
+            "active": True,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        return cls.create_document("device_tokens", doc_id, payload)
+
+    @classmethod
+    def create_system_event(
         cls,
         event_type: str,
-        assignment_id: Optional[str] = None,
         parcel_id: Optional[str] = None,
+        assignment_id: Optional[str] = None,
         employee_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        event_id = f"evt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{parcel_id or 'sys'}"
+        import uuid
+        event_id = f"evt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
         payload = {
+            "event_id": event_id,
             "event_type": event_type,
-            "assignment_id": assignment_id,
-            "parcel_id": parcel_id,
-            "employee_id": employee_id,
+            "parcel_id": str(parcel_id) if parcel_id else None,
+            "assignment_id": str(assignment_id) if assignment_id else None,
+            "employee_id": str(employee_id) if employee_id else None,
             "metadata": metadata or {},
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         return cls.create_document("system_events", event_id, payload)
+
+    # Legacy alias for backward compatibility
+    publish_system_event = create_system_event
 
     # -------------------------------------------------------------------------
     # FCM Cloud Messaging
