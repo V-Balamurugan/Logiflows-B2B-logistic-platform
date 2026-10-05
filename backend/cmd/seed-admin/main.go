@@ -326,5 +326,197 @@ func main() {
 		logger.Info("Seeded branch successfully", slog.String("code", b.Code), slog.String("name", b.Name))
 	}
 
+	// 5. Seed Vehicles & Telematics
+	type SeedVehicle struct {
+		ID            uuid.UUID
+		TenantID      uuid.UUID
+		BranchCode    string
+		LicensePlate  string
+		VIN           string
+		Make          string
+		Model         string
+		Year          int
+		VehicleType   string
+		FuelType      string
+		CapacityKG    float64
+		VolumeM3      float64
+		MaxParcels    int
+		MileageKM     float64
+		BatteryFuel   float64
+		Status        string
+		Lat           float64
+		Lon           float64
+		Speed         float64
+		Heading       float64
+	}
+
+	veh1ID := uuid.MustParse("00000000-0000-0000-0001-000000000001")
+	veh2ID := uuid.MustParse("00000000-0000-0000-0001-000000000002")
+	veh3ID := uuid.MustParse("00000000-0000-0000-0001-000000000003")
+	veh4ID := uuid.MustParse("00000000-0000-0000-0002-000000000001")
+
+	seedVehicles := []SeedVehicle{
+		{
+			ID:           veh1ID,
+			TenantID:     tenant1ID,
+			BranchCode:   "BLR-HUB-01",
+			LicensePlate: "KA-01-EV-1001",
+			VIN:          "MBBLREVITO2024001",
+			Make:         "Tata",
+			Model:        "Ace EV",
+			Year:         2024,
+			VehicleType:  "ELECTRIC_VAN",
+			FuelType:     "ELECTRIC",
+			CapacityKG:   800.0,
+			VolumeM3:     4.5,
+			MaxParcels:   150,
+			MileageKM:    1240.5,
+			BatteryFuel:  88.5,
+			Status:       "ON_ROUTE",
+			Lat:          12.9750,
+			Lon:          77.5980,
+			Speed:        38.5,
+			Heading:      135.0,
+		},
+		{
+			ID:           veh2ID,
+			TenantID:     tenant1ID,
+			BranchCode:   "BLR-DC-NORTH",
+			LicensePlate: "KA-04-MC-2002",
+			VIN:          "ATH450XBLR2024002",
+			Make:         "Ather",
+			Model:        "450X Gen 3",
+			Year:         2024,
+			VehicleType:  "MOTORCYCLE",
+			FuelType:     "ELECTRIC",
+			CapacityKG:   65.0,
+			VolumeM3:     0.5,
+			MaxParcels:   30,
+			MileageKM:    3450.0,
+			BatteryFuel:  74.0,
+			Status:       "AVAILABLE",
+			Lat:          13.0360,
+			Lon:          77.5975,
+			Speed:        0.0,
+			Heading:      0.0,
+		},
+		{
+			ID:           veh3ID,
+			TenantID:     tenant1ID,
+			BranchCode:   "BLR-DC-SOUTH",
+			LicensePlate: "KA-51-TK-3003",
+			VIN:          "ALDOSTBLR2023003",
+			Make:         "Ashok Leyland",
+			Model:        "Bada Dost",
+			Year:         2023,
+			VehicleType:  "TRUCK",
+			FuelType:     "DIESEL",
+			CapacityKG:   1800.0,
+			VolumeM3:     8.5,
+			MaxParcels:   350,
+			MileageKM:    9600.0,
+			BatteryFuel:  65.0,
+			Status:       "AVAILABLE",
+			Lat:          12.9280,
+			Lon:          77.6275,
+			Speed:        0.0,
+			Heading:      0.0,
+		},
+		{
+			ID:           veh4ID,
+			TenantID:     tenant2ID,
+			BranchCode:   "CHN-HUB-01",
+			LicensePlate: "TN-01-EV-4004",
+			VIN:          "MAHTREOCHN2024004",
+			Make:         "Mahindra",
+			Model:        "Zor Grand EV",
+			Year:         2024,
+			VehicleType:  "ELECTRIC_VAN",
+			FuelType:     "ELECTRIC",
+			CapacityKG:   500.0,
+			VolumeM3:     3.5,
+			MaxParcels:   100,
+			MileageKM:    2100.0,
+			BatteryFuel:  92.0,
+			Status:       "AVAILABLE",
+			Lat:          13.0830,
+			Lon:          80.2710,
+			Speed:        0.0,
+			Heading:      0.0,
+		},
+	}
+
+	for _, sv := range seedVehicles {
+		var branchID *uuid.UUID
+		err := db.QueryRowContext(ctx, "SELECT id FROM branches WHERE tenant_id = $1 AND code = $2", sv.TenantID, sv.BranchCode).Scan(&branchID)
+		if err != nil {
+			logger.Warn("Could not resolve branch for vehicle", slog.String("branch", sv.BranchCode), slog.String("plate", sv.LicensePlate))
+		}
+
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO vehicles (
+				id, tenant_id, assigned_branch_id, license_plate, vin, make, model, year,
+				vehicle_type, fuel_type, capacity_kg, capacity_volume_m3, max_parcels,
+				current_mileage_km, battery_or_fuel_level_percent, status, metadata
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				$9, $10, $11, $12, $13,
+				$14, $15, $16, '{}'
+			) ON CONFLICT (tenant_id, license_plate) DO UPDATE SET
+				assigned_branch_id = EXCLUDED.assigned_branch_id,
+				make = EXCLUDED.make,
+				model = EXCLUDED.model,
+				vehicle_type = EXCLUDED.vehicle_type,
+				fuel_type = EXCLUDED.fuel_type,
+				capacity_kg = EXCLUDED.capacity_kg,
+				capacity_volume_m3 = EXCLUDED.capacity_volume_m3,
+				max_parcels = EXCLUDED.max_parcels,
+				current_mileage_km = EXCLUDED.current_mileage_km,
+				battery_or_fuel_level_percent = EXCLUDED.battery_or_fuel_level_percent,
+				status = EXCLUDED.status;
+		`, sv.ID, sv.TenantID, branchID, sv.LicensePlate, sv.VIN, sv.Make, sv.Model, sv.Year,
+			sv.VehicleType, sv.FuelType, sv.CapacityKG, sv.VolumeM3, sv.MaxParcels,
+			sv.MileageKM, sv.BatteryFuel, sv.Status)
+
+		if err != nil {
+			logger.Error("Failed to seed vehicle", slog.String("plate", sv.LicensePlate), slog.String("error", err.Error()))
+			continue
+		}
+
+		// Insert GPS telematics point
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO vehicle_telematics (
+				vehicle_id, tenant_id, location, latitude, longitude,
+				speed_kmh, heading_degrees, battery_or_fuel_percent, odometer_km, recorded_at
+			) VALUES (
+				$1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $4, $3,
+				$5, $6, $7, $8, CURRENT_TIMESTAMP
+			);
+		`, sv.ID, sv.TenantID, sv.Lon, sv.Lat, sv.Speed, sv.Heading, sv.BatteryFuel, sv.MileageKM)
+
+		if err != nil {
+			logger.Warn("Failed to seed telematics ping", slog.String("plate", sv.LicensePlate), slog.String("error", err.Error()))
+		}
+
+		logger.Info("Seeded vehicle and telematics", slog.String("plate", sv.LicensePlate), slog.String("type", sv.VehicleType))
+	}
+
+	// 6. Seed Maintenance Record for Truck (approaching 10,000 km service)
+	nextDueKM := 10000.0
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO maintenance_records (
+			vehicle_id, tenant_id, service_type, description, cost,
+			odometer_reading_km, serviced_at, next_service_due_km
+		) VALUES (
+			$1, $2, 'ENGINE_OIL_CHANGE', 'Full synthetic 15W-40 lube replacement and filter tuneup',
+			250.00, 5000.00, CURRENT_TIMESTAMP - INTERVAL '90 days', $3
+		);
+	`, veh3ID, tenant1ID, nextDueKM)
+	if err != nil {
+		logger.Warn("Maintenance seed skipped/exists", slog.String("error", err.Error()))
+	} else {
+		logger.Info("Seeded maintenance record for vehicle", slog.String("plate", "KA-51-TK-3003"))
+	}
+
 	logger.Info("Database seeding completed successfully!")
 }

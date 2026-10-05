@@ -51,6 +51,12 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   String? _authError;
   bool _isLoggingIn = false;
 
+  List<dynamic> _vehicles = [];
+  Map<String, dynamic>? _selectedVehicle;
+  bool _isLoadingVehicles = false;
+  bool _isSendingTelem = false;
+  String? _telemStatusMsg;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +82,60 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     });
   }
 
+  Future<void> _fetchVehicles() async {
+    final token = _tokens?['access_token']?.toString();
+    if (token == null) return;
+    setState(() => _isLoadingVehicles = true);
+    final res = await _apiClient.getVehicles(token);
+    setState(() {
+      _isLoadingVehicles = false;
+      if (res['success'] == true) {
+        _vehicles = res['data'] is List ? res['data'] as List : [];
+        if (_vehicles.isNotEmpty && _selectedVehicle == null) {
+          _selectedVehicle = _vehicles.first as Map<String, dynamic>;
+        }
+      }
+    });
+  }
+
+  Future<void> _sendLivePing() async {
+    final token = _tokens?['access_token']?.toString();
+    final vehId = _selectedVehicle?['id']?.toString();
+    if (token == null || vehId == null) return;
+
+    setState(() {
+      _isSendingTelem = true;
+      _telemStatusMsg = null;
+    });
+
+    final currentMileage = (_selectedVehicle?['current_mileage_km'] as num?)?.toDouble() ?? 100.0;
+    final currentBattery = (_selectedVehicle?['battery_or_fuel_level_percent'] as num?)?.toDouble() ?? 95.0;
+
+    final res = await _apiClient.sendTelematicsPing(
+      accessToken: token,
+      vehicleId: vehId,
+      latitude: 12.9716,
+      longitude: 77.5946,
+      speedKmh: 42.0,
+      headingDegrees: 120.0,
+      batteryOrFuelPercent: (currentBattery - 0.5).clamp(0.0, 100.0),
+      odometerKm: currentMileage + 1.2,
+    );
+
+    setState(() {
+      _isSendingTelem = false;
+      if (res['success'] == true) {
+        _telemStatusMsg = 'Ping delivered! 12.9716, 77.5946 • 42 km/h';
+        if (_selectedVehicle != null) {
+          _selectedVehicle!['current_mileage_km'] = currentMileage + 1.2;
+          _selectedVehicle!['battery_or_fuel_level_percent'] = (currentBattery - 0.5).clamp(0.0, 100.0);
+        }
+      } else {
+        _telemStatusMsg = 'Error: ${res['message']}';
+      }
+    });
+  }
+
   Future<void> _handleLogin() async {
     setState(() {
       _isLoggingIn = true;
@@ -97,6 +157,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         _authError = res['message'] ?? 'Authentication failed';
       }
     });
+
+    if (res['success'] == true) {
+      _fetchVehicles();
+    }
   }
 
   void _handleLogout() {
@@ -104,6 +168,9 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       _user = null;
       _tokens = null;
       _authError = null;
+      _vehicles = [];
+      _selectedVehicle = null;
+      _telemStatusMsg = null;
     });
   }
 
@@ -375,6 +442,171 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                             ),
                           ],
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  color: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0x1AFFFFFF)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.directions_car, color: Colors.blueAccent, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Fleet Vehicle & Telematics',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, size: 18, color: Colors.white60),
+                              onPressed: _isLoadingVehicles ? null : _fetchVehicles,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_isLoadingVehicles) ...[
+                          const Center(child: CircularProgressIndicator()),
+                        ] else if (_vehicles.isEmpty) ...[
+                          const Text(
+                            'No vehicles registered or assigned to this tenant yet.',
+                            style: TextStyle(color: Colors.white60, fontSize: 13),
+                          ),
+                        ] else ...[
+                          DropdownButtonFormField<String>(
+                            value: _selectedVehicle?['id']?.toString(),
+                            dropdownColor: const Color(0xFF0F172A),
+                            decoration: InputDecoration(
+                              labelText: 'Active Delivery Vehicle',
+                              labelStyle: const TextStyle(color: Colors.white60, fontSize: 12),
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            items: _vehicles.map<DropdownMenuItem<String>>((v) {
+                              final map = v as Map<String, dynamic>;
+                              return DropdownMenuItem<String>(
+                                value: map['id']?.toString(),
+                                child: Text(
+                                  '${map['license_plate']} • ${map['make']} ${map['model']} (${map['vehicle_type']})',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedVehicle = _vehicles.firstWhere(
+                                  (v) => (v as Map<String, dynamic>)['id']?.toString() == val,
+                                  orElse: () => _vehicles.first,
+                                ) as Map<String, dynamic>;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0x1AFFFFFF)),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Power / Battery Level', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    Text(
+                                      '${(_selectedVehicle?['battery_or_fuel_level_percent'] as num?)?.toStringAsFixed(1) ?? '100'}%',
+                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Odometer Reading', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    Text(
+                                      '${(_selectedVehicle?['current_mileage_km'] as num?)?.toStringAsFixed(1) ?? '0'} km',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Operational Status', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueAccent.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        _selectedVehicle?['status']?.toString() ?? 'AVAILABLE',
+                                        style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _isSendingTelem ? null : _sendLivePing,
+                              icon: const Icon(Icons.gps_fixed, size: 16),
+                              label: _isSendingTelem
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Text('Send GPS Telemetry Ping'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          if (_telemStatusMsg != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _telemStatusMsg!,
+                              style: TextStyle(
+                                color: _telemStatusMsg!.startsWith('Error') ? Colors.redAccent : Colors.tealAccent,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
                       ],
                     ),
                   ),

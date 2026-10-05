@@ -159,6 +159,87 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> getVehicles(String accessToken) async {
+    final targetUri = buildUri('/vehicles');
+    try {
+      final response = await client.get(
+        targetUri,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      final decoded = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': decoded['data'] ?? []};
+      }
+      return {'success': false, 'message': decoded['error']?['message'] ?? 'Failed to fetch vehicles'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> sendTelematicsPing({
+    required String accessToken,
+    required String vehicleId,
+    required double latitude,
+    required double longitude,
+    required double speedKmh,
+    required double headingDegrees,
+    required double batteryOrFuelPercent,
+    required double odometerKm,
+  }) async {
+    final targetUri = buildUri('/vehicles/$vehicleId/telematics');
+    try {
+      final response = await client.post(
+        targetUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: json.encode({
+          'latitude': latitude,
+          'longitude': longitude,
+          'speed_kmh': speedKmh,
+          'heading_degrees': headingDegrees,
+          'battery_or_fuel_percent': batteryOrFuelPercent,
+          'odometer_km': odometerKm,
+        }),
+      ).timeout(const Duration(seconds: 6));
+
+      final decoded = json.decode(response.body);
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return {'success': true, 'data': decoded['data']};
+      }
+      return {'success': false, 'message': decoded['error']?['message'] ?? 'Failed to send telematics'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> getLiveFleet(String accessToken) async {
+    final targetUri = buildUri('/fleet/live');
+    try {
+      final response = await client.get(
+        targetUri,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      final decoded = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': decoded['data'] ?? []};
+      }
+      return {'success': false, 'message': decoded['error']?['message'] ?? 'Failed to fetch live fleet'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   void dispose() {
     client.close();
   }
