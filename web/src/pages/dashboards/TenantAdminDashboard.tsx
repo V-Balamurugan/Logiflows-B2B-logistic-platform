@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Network, Plus, Building2, MapPin, Phone, Mail, CheckCircle2,
-  ShieldCheck, Package, BarChart3, Layers, Filter, ArrowUpRight
+  ShieldCheck, Package, BarChart3, Layers, Filter, ArrowUpRight, Truck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Branch } from '../../types/tenancy';
 import { GeospatialMap } from '../../components/GeospatialMap';
 import { CreateBranchModal } from '../../components/CreateBranchModal';
+import { FleetManagementView } from '../../components/FleetManagementView';
 import { DashboardLayout } from '../../components/DashboardLayout';
 
 interface TenantAdminDashboardProps {
@@ -15,6 +16,7 @@ interface TenantAdminDashboardProps {
 
 const NAV = [
   { icon: <BarChart3 className="w-4 h-4" />, label: 'Overview' },
+  { icon: <Truck className="w-4 h-4" />, label: 'Fleet & Telematics' },
   { icon: <MapPin className="w-4 h-4" />, label: 'PostGIS Map' },
   { icon: <Building2 className="w-4 h-4" />, label: 'Branch Registry' },
   { icon: <Layers className="w-4 h-4" />, label: 'Zone Coverage' },
@@ -265,6 +267,23 @@ export const TenantAdminDashboard: React.FC<TenantAdminDashboardProps> = ({ onNa
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Fleet & Telematics Management */}
+        {(activeNav === 'Fleet & Telematics' || activeNav === 'Overview') && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Fleet Telematics & Vehicle Assets</h2>
+                <p className="text-xs text-slate-400">Live GPS tracking, road speed, energy levels, and maintenance telemetry</p>
+              </div>
+            </div>
+            <FleetManagementView
+              token={localStorage.getItem('access_token') || ''}
+              tenantId={tenantId}
+              branches={branches}
+            />
           </div>
         )}
 
