@@ -11,6 +11,8 @@ build/
 # Dependencies
 node_modules/
 vendor/
+*.timestamp-*.mjs
+
 .venv/
 env/
 __pycache__/
@@ -30,11 +32,17 @@ __pycache__/
 
 # Environment & Secrets (NEVER COMMIT)
 .env
+.env.*
 .env.local
 .env.*.local
 *.pem
 *.key
 service-account*.json
+serviceAccount*.json
+*serviceAccountKey*.json
+serviceAccountKey.json
+firebase-service-account.json
+*-firebase-adminsdk-*.json
 firebase-adminsdk*.json
 
 # OS & IDE
@@ -48,3 +56,17 @@ Thumbs.db
 # Docker / Logs
 *.log
 docker/data/
+
+# AI Agent metadata
+.agents/
+.aider-desk/
+.autohand/
+.claude/
+.codeartsdoer/
+.codebuddy/
+.codemaker/
+.codestudio/
+skills/
+skills-lock.json
+data/
+

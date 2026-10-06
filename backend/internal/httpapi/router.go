@@ -9,19 +9,41 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/redis/go-redis/v9"
+	"logiflows/backend/internal/auth"
 	"logiflows/backend/internal/config"
 	"logiflows/backend/internal/middleware"
+	fb "logiflows/backend/internal/firebase"
+	"logiflows/backend/internal/fleet"
+	"logiflows/backend/internal/routing"
+	"logiflows/backend/internal/swagger"
+	"logiflows/backend/internal/tenancy"
+	"logiflows/backend/internal/tracking"
 )
 
 type ServerDeps struct {
-	Config  *config.Config
-	Logger  *slog.Logger
-	DB      *sql.DB
-	Redis   *redis.Client
-	Version string
+	Config          *config.Config
+	Logger          *slog.Logger
+	DB              *sql.DB
+	Redis           *redis.Client
+	AuthService     *auth.AuthService
+	TenancyService  tenancy.Service
+	FleetService    fleet.Service
+	FirebaseService fb.Service
+	TrackingService tracking.Service
+	RoutingService  routing.Service
+	Version         string
 }
 
 func BuildRouter(deps ServerDeps) http.Handler {
+	if deps.Logger == nil {
+		deps.Logger = slog.Default()
+	}
+	if deps.Config == nil {
+		deps.Config = &config.Config{
+			JWTSecret: "test_secret_key_at_least_32_bytes_long",
+		}
+	}
+
 	r := chi.NewRouter()
 
 	// Global Core Middlewares
@@ -41,20 +63,75 @@ func BuildRouter(deps ServerDeps) http.Handler {
 	}))
 
 	healthHandler := NewHealthHandler(deps.DB, deps.Redis, deps.Config.AIServiceURL, deps.Version)
+	authHandler := NewAuthHandler(deps.AuthService)
+	var tenancyHandler *TenancyHandler
+	if deps.TenancyService != nil {
+		tenancyHandler = NewTenancyHandler(deps.TenancyService)
+	}
+	var fleetHandler *FleetHandler
+	if deps.FleetService != nil {
+		fleetHandler = NewFleetHandler(deps.FleetService)
+	}
+
+	// Interactive Swagger UI & OpenAPI Specification routes
+	r.Get("/swagger", swagger.UIHandler)
+	r.Get("/swagger/*", swagger.UIHandler)
+	r.Get("/docs", swagger.UIHandler)
+	r.Get("/openapi.yaml", swagger.SpecHandler)
 
 	// Base root route
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		RespondJSON(w, r, http.StatusOK, map[string]string{
-			"service": "LogiFlows Authoritative Backend",
-			"status":  "operational",
+			"service":  "LogiFlows Authoritative Backend",
+			"status":   "operational",
+			"version":  deps.Version,
+			"swagger":  "/swagger",
+			"docs":     "/docs",
 			"api_docs": "/api/v1/openapi.yaml",
 		}, nil)
 	})
 
 	// API v1 Namespace
 	r.Route("/api/v1", func(v1 chi.Router) {
+		// OpenAPI Spec & Documentation inside /api/v1
+		v1.Get("/openapi.yaml", swagger.SpecHandler)
+		v1.Get("/docs", swagger.UIHandler)
+		v1.Get("/swagger", swagger.UIHandler)
+		// System Health
 		v1.Get("/healthz", healthHandler.Healthz)
 		v1.Get("/readyz", healthHandler.Readyz)
+
+		// Firebase Operational Status
+		v1.Get("/firebase/status", func(w http.ResponseWriter, r *http.Request) {
+			enabled := false
+			if deps.FirebaseService != nil {
+				enabled = deps.FirebaseService.IsAvailable()
+			}
+			RespondJSON(w, r, http.StatusOK, map[string]any{
+				"firebase_enabled": enabled,
+				"project_id":       deps.Config.FirebaseProjectID,
+				"storage_bucket":   deps.Config.FirebaseStorageBucket,
+				"mode":             map[bool]string{true: "LIVE_CLOUD", false: "SIMULATED_MOCK"}[enabled],
+			}, nil)
+		})
+
+		// Firebase Client Public Config
+		v1.Get("/firebase/config", func(w http.ResponseWriter, r *http.Request) {
+			RespondJSON(w, r, http.StatusOK, map[string]string{
+				"project_id":     deps.Config.FirebaseProjectID,
+				"storage_bucket": deps.Config.FirebaseStorageBucket,
+			}, nil)
+		})
+
+		// Routing & Direction Engine (OpenRouteService / PostGIS)
+		if deps.RoutingService != nil {
+			routingHandler := routing.NewHandler(deps.RoutingService, RespondJSON, RespondError)
+			v1.Route("/routing", func(rtr chi.Router) {
+				rtr.Get("/status", routingHandler.GetStatus)
+				rtr.Post("/directions", routingHandler.CalculateDirections)
+				rtr.Post("/matrix", routingHandler.CalculateMatrix)
+			})
+		}
 
 		// Foundation API Ping
 		v1.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +139,140 @@ func BuildRouter(deps ServerDeps) http.Handler {
 				"message": "pong",
 				"system":  "LogiFlows Core Logistics Platform",
 			}, nil)
+		})
+
+		// Public or Authenticated Geospatial Serviceability Check
+		if tenancyHandler != nil {
+			v1.Post("/serviceability/check", tenancyHandler.CheckServiceability)
+			v1.Get("/serviceability/check", tenancyHandler.CheckServiceability)
+		}
+
+		// Realtime Delivery Telemetry & WebSocket Tracking
+		if deps.TrackingService != nil {
+			trackingHandler := tracking.NewHandler(deps.TrackingService, deps.Logger)
+			v1.Route("/tracking", func(tr chi.Router) {
+				tr.Post("/location", trackingHandler.UpdateLocation)
+				tr.Get("/location/{assignment_id}", trackingHandler.GetLocation)
+				tr.Get("/ws/{assignment_id}", trackingHandler.StreamWebSocket)
+			})
+		}
+
+		// Public Authentication
+		v1.Route("/auth", func(authRouter chi.Router) {
+			authRouter.Post("/register", authHandler.Register)
+			authRouter.Post("/login", authHandler.Login)
+			authRouter.Post("/refresh", authHandler.Refresh)
+
+			// Authenticated Auth Endpoints
+			authRouter.Group(func(protected chi.Router) {
+				protected.Use(middleware.Authenticate(deps.Config))
+				protected.Post("/logout", authHandler.Logout)
+				protected.Get("/me", authHandler.Me)
+			})
+		})
+
+		// Protected Operations (RBAC & Tenant Isolation)
+		v1.Group(func(protected chi.Router) {
+			protected.Use(middleware.Authenticate(deps.Config))
+
+			// Endpoint requiring platform admin role
+			protected.With(middleware.RequireRole(auth.RolePlatformAdmin)).Get("/admin/system-check", func(w http.ResponseWriter, r *http.Request) {
+				RespondJSON(w, r, http.StatusOK, map[string]string{
+					"message": "Platform admin access granted",
+				}, nil)
+			})
+
+			// Endpoint requiring parcel.create permission
+			protected.With(middleware.RequirePermission(auth.PermParcelCreate)).Get("/parcels/permission-check", func(w http.ResponseWriter, r *http.Request) {
+				RespondJSON(w, r, http.StatusOK, map[string]string{
+					"message": "User has parcel.create permission",
+				}, nil)
+			})
+
+			// Tenants & Branches Route Group
+			if tenancyHandler != nil {
+				protected.Route("/tenants", func(tr chi.Router) {
+					// Tenant listing & creation
+					tr.With(middleware.RequireRole(auth.RolePlatformAdmin)).Post("/", tenancyHandler.CreateTenant)
+					tr.With(middleware.RequirePermission(auth.PermTenantRead)).Get("/", tenancyHandler.ListTenants)
+
+					// Scoped to specific tenant
+					tr.Route("/{tenant_id}", func(singleTenant chi.Router) {
+						singleTenant.Use(middleware.EnforceTenantIsolation("tenant_id"))
+						singleTenant.With(middleware.RequirePermission(auth.PermTenantRead)).Get("/", tenancyHandler.GetTenant)
+						singleTenant.With(middleware.RequirePermission(auth.PermTenantUpdate)).Put("/", tenancyHandler.UpdateTenant)
+
+						// Geospatial Coverage GeoJSON FeatureCollection
+						singleTenant.Get("/serviceability/coverage", tenancyHandler.GetCoverage)
+
+						// Branch Management (Strictly Tenant-isolated)
+						singleTenant.Route("/branches", func(br chi.Router) {
+							br.Get("/", tenancyHandler.ListBranches)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Post("/", tenancyHandler.CreateBranch)
+							br.Get("/{branch_id}", tenancyHandler.GetBranch)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Put("/{branch_id}", tenancyHandler.UpdateBranch)
+							br.With(middleware.RequirePermission(auth.PermBranchManage)).Delete("/{branch_id}", tenancyHandler.DeleteBranch)
+						})
+
+						// Boundary verification
+						singleTenant.Get("/boundary-check", func(w http.ResponseWriter, r *http.Request) {
+							routeTenantID := chi.URLParam(r, "tenant_id")
+							RespondJSON(w, r, http.StatusOK, map[string]string{
+								"message":   "Tenant boundary access verified",
+								"tenant_id": routeTenantID,
+							}, nil)
+						})
+
+						// Fleet Management & Vehicle Telematics (Strictly Tenant-isolated)
+						if fleetHandler != nil {
+							singleTenant.Route("/vehicles", func(vr chi.Router) {
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/", fleetHandler.ListVehicles)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/", fleetHandler.CreateVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}", fleetHandler.GetVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Put("/{vehicle_id}", fleetHandler.UpdateVehicle)
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Delete("/{vehicle_id}", fleetHandler.DeleteVehicle)
+
+								// Telematics & GPS breadcrumbs
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/telematics", fleetHandler.IngestTelematics)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/latest", fleetHandler.GetLatestTelematics)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/history", fleetHandler.GetTelematicsHistory)
+
+								// Maintenance
+								vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/maintenance", fleetHandler.CreateMaintenance)
+								vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/maintenance", fleetHandler.ListMaintenance)
+							})
+
+							singleTenant.Route("/fleet", func(fr chi.Router) {
+								fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/live", fleetHandler.GetLiveFleetPositions)
+								fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/maintenance/upcoming", fleetHandler.ListUpcomingMaintenance)
+							})
+						}
+					})
+				})
+			}
+
+			// Convenient Top-Level Fleet Endpoints (tenant_id inferred from JWT claims/context)
+			if fleetHandler != nil {
+				protected.Route("/vehicles", func(vr chi.Router) {
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/", fleetHandler.ListVehicles)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/", fleetHandler.CreateVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}", fleetHandler.GetVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Put("/{vehicle_id}", fleetHandler.UpdateVehicle)
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Delete("/{vehicle_id}", fleetHandler.DeleteVehicle)
+
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/telematics", fleetHandler.IngestTelematics)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/latest", fleetHandler.GetLatestTelematics)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/telematics/history", fleetHandler.GetTelematicsHistory)
+
+					vr.With(middleware.RequirePermission(auth.PermVehicleManage)).Post("/{vehicle_id}/maintenance", fleetHandler.CreateMaintenance)
+					vr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/{vehicle_id}/maintenance", fleetHandler.ListMaintenance)
+				})
+
+				protected.Route("/fleet", func(fr chi.Router) {
+					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/live", fleetHandler.GetLiveFleetPositions)
+					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/maintenance/upcoming", fleetHandler.ListUpcomingMaintenance)
+				})
+			}
 		})
 	})
 

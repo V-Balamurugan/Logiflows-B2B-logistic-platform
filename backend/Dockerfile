@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
@@ -12,6 +12,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/bin/api ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/bin/migrate ./cmd/migrate
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/bin/seed-admin ./cmd/seed-admin
 
 # Runtime stage
 FROM alpine:3.19
@@ -22,6 +23,7 @@ WORKDIR /app
 
 COPY --from=builder /app/bin/api /app/bin/api
 COPY --from=builder /app/bin/migrate /app/bin/migrate
+COPY --from=builder /app/bin/seed-admin /app/bin/seed-admin
 
 EXPOSE 8080
 

@@ -3,7 +3,10 @@ import os
 import time
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.api import health, predict
+try:
+    from app.api import health, predict, firebase
+except ImportError:
+    from ai.app.api import health, predict, firebase
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +30,8 @@ async def add_process_time_header(request: Request, call_next):
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(predict.router, prefix="/api/v1/predict", tags=["Prediction"])
+app.include_router(firebase.router, prefix="/api/v1", tags=["Firebase Services"])
+app.include_router(firebase.router, prefix="/api", tags=["Firebase Services (Direct)"])
 
 @app.get("/")
 def root():
