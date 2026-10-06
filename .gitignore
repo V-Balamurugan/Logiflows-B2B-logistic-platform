@@ -56,3 +56,17 @@ Thumbs.db
 # Docker / Logs
 *.log
 docker/data/
+
+# AI Agent metadata
+.agents/
+.aider-desk/
+.autohand/
+.claude/
+.codeartsdoer/
+.codebuddy/
+.codemaker/
+.codestudio/
+skills/
+skills-lock.json
+data/
+
