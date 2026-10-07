@@ -22,7 +22,13 @@ type Config struct {
 	JWTSecret         string
 	JWTIssuer         string
 	JWTAccessExpiry   time.Duration
-	AllowedOrigins    []string
+	AllowedOrigins         []string
+	FirebaseProjectID      string
+	FirebaseClientEmail    string
+	FirebasePrivateKey     string
+	FirebaseStorageBucket  string
+	FirebaseCredentialsFile string
+	RoutingAPIKey          string
 }
 
 func LoadConfig() (*Config, error) {
@@ -39,7 +45,7 @@ func LoadConfig() (*Config, error) {
 	jwtSecret := getEnv("JWT_SECRET", "default_dev_jwt_secret_must_be_overridden_in_prod")
 	jwtIssuer := getEnv("JWT_ISSUER", "logiflows-auth-service")
 
-	originsStr := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+	originsStr := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174")
 	var origins []string
 	for _, o := range strings.Split(originsStr, ",") {
 		trimmed := strings.TrimSpace(o)
@@ -61,8 +67,14 @@ func LoadConfig() (*Config, error) {
 		AIServiceURL:      aiURL,
 		JWTSecret:         jwtSecret,
 		JWTIssuer:         jwtIssuer,
-		JWTAccessExpiry:   15 * time.Minute,
-		AllowedOrigins:    origins,
+		JWTAccessExpiry:        15 * time.Minute,
+		AllowedOrigins:         origins,
+		FirebaseProjectID:      getEnv("FIREBASE_PROJECT_ID", ""),
+		FirebaseClientEmail:    getEnv("FIREBASE_CLIENT_EMAIL", ""),
+		FirebasePrivateKey:     getEnv("FIREBASE_PRIVATE_KEY", ""),
+		FirebaseStorageBucket:  getEnv("FIREBASE_STORAGE_BUCKET", ""),
+		FirebaseCredentialsFile: getEnv("GOOGLE_APPLICATION_CREDENTIALS", getEnv("FIREBASE_CREDENTIALS_FILE", "serviceAccountKey.json")),
+		RoutingAPIKey:          strings.Trim(strings.TrimSpace(getEnv("ORS_API_KEY", getEnv("ROUTING_API_KEY", getEnv("OPENROUTESERVICE_API_KEY", "")))), "\"'"),
 	}, nil
 }
 
