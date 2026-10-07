@@ -11,8 +11,8 @@
 | **US-3-01** | P3 | Fleet Vehicle Inventory | TC-FLEET-001 | Unit | `internal/fleet/fleet_test.go` | PASS |
 | **US-3-02** | P3 | Sub-second Telematics Ingestion | TC-FLEET-002 | Unit/Integration | `internal/fleet/fleet_test.go` | PASS |
 | **US-3-03** | P3 | Resilient Routing Engine | TC-ROUTING-001 | Unit/Mock | `internal/routing/routing_test.go` | PASS |
-| **US-4-01** | P4 | Customers & Addresses Schema | TC-CUST-001 | Integration | `internal/migrations/migrate_test.go` | PLANNED |
-| **US-4-02** | P4 | Customer Address Book Management| TC-CUST-002 | API | `internal/httpapi/customer_test.go` | PLANNED |
-| **US-4-03** | P4 | Parcel Booking & State Machine | TC-PARCEL-001 | Unit/Integration | `internal/parcel/parcel_test.go` | PLANNED |
-| **US-4-04** | P4 | Idempotent Booking & Tracking ID | TC-PARCEL-002 | API | `internal/httpapi/parcel_test.go` | PLANNED |
-| **US-4-05** | P4 | Customer Parcel Portal & UI | TC-UI-001 | Component | `web/tests/booking.test.js` | PLANNED |
+| **US-4-01** | P4 | Customers & Addresses Schema | TC-CUST-001 | Integration | `internal/migrations/migrate_test.go` | PASS |
+| **US-4-02** | P4 | Customer Address Book Management| TC-CUST-002 | API | `internal/httpapi/parcel_test.go` | PASS |
+| **US-4-03** | P4 | Parcel Booking & State Machine | TC-PARCEL-001 | Unit/Integration | `internal/parcel/parcel_test.go` | PASS |
+| **US-4-04** | P4 | Idempotent Booking & Tracking ID | TC-PARCEL-002 | API | `internal/httpapi/parcel_test.go` | PASS |
+| **US-4-05** | P4 | Customer Parcel Portal & UI | TC-UI-001 | Component | `web/src/components/BookParcelModal.tsx` | PASS |

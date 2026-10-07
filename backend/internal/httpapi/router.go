@@ -14,6 +14,7 @@ import (
 	"logiflows/backend/internal/middleware"
 	fb "logiflows/backend/internal/firebase"
 	"logiflows/backend/internal/fleet"
+	"logiflows/backend/internal/parcel"
 	"logiflows/backend/internal/routing"
 	"logiflows/backend/internal/swagger"
 	"logiflows/backend/internal/tenancy"
@@ -31,6 +32,7 @@ type ServerDeps struct {
 	FirebaseService fb.Service
 	TrackingService tracking.Service
 	RoutingService  routing.Service
+	ParcelService   parcel.Service
 	Version         string
 }
 
@@ -71,6 +73,10 @@ func BuildRouter(deps ServerDeps) http.Handler {
 	var fleetHandler *FleetHandler
 	if deps.FleetService != nil {
 		fleetHandler = NewFleetHandler(deps.FleetService)
+	}
+	var parcelHandler *ParcelHandler
+	if deps.ParcelService != nil {
+		parcelHandler = NewParcelHandler(deps.ParcelService, deps.Config.JWTSecret)
 	}
 
 	// Interactive Swagger UI & OpenAPI Specification routes
@@ -145,6 +151,11 @@ func BuildRouter(deps ServerDeps) http.Handler {
 		if tenancyHandler != nil {
 			v1.Post("/serviceability/check", tenancyHandler.CheckServiceability)
 			v1.Get("/serviceability/check", tenancyHandler.CheckServiceability)
+		}
+
+		// Public Parcel Tracking by Tracking ID
+		if parcelHandler != nil {
+			v1.Get("/parcels/track/{tracking_number}", parcelHandler.TrackParcel)
 		}
 
 		// Realtime Delivery Telemetry & WebSocket Tracking
@@ -271,6 +282,25 @@ func BuildRouter(deps ServerDeps) http.Handler {
 				protected.Route("/fleet", func(fr chi.Router) {
 					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/live", fleetHandler.GetLiveFleetPositions)
 					fr.With(middleware.RequirePermission(auth.PermVehicleRead)).Get("/maintenance/upcoming", fleetHandler.ListUpcomingMaintenance)
+				})
+			}
+
+			// Authoritative Parcel Management & Custody Handover
+			if parcelHandler != nil {
+				protected.Route("/parcels", func(pr chi.Router) {
+					pr.With(middleware.RequirePermission(auth.PermParcelCreate)).Post("/book", parcelHandler.BookParcel)
+					pr.With(middleware.RequirePermission(auth.PermParcelRead)).Get("/", parcelHandler.ListParcels)
+					pr.With(middleware.RequirePermission(auth.PermParcelRead)).Get("/{id}", parcelHandler.GetParcel)
+					pr.With(middleware.RequirePermission(auth.PermParcelUpdate)).Patch("/{id}/status", parcelHandler.UpdateStatus)
+					pr.With(middleware.RequirePermission(auth.PermCustodyCreate)).Post("/scan", parcelHandler.ScanQR)
+					pr.With(middleware.RequirePermission(auth.PermCustodyRead)).Get("/{id}/custody", parcelHandler.GetCustodyTimeline)
+				})
+
+				// Customer Saved Address Book
+				protected.Route("/customers/addresses", func(ar chi.Router) {
+					ar.Post("/", parcelHandler.CreateAddress)
+					ar.Get("/", parcelHandler.ListAddresses)
+					ar.Delete("/{id}", parcelHandler.DeleteAddress)
 				})
 			}
 		})

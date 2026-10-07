@@ -1,11 +1,11 @@
 # Agent State & Continuity Tracker
 
 **Current Phase:** Phase 4 — Customers, Addresses, Parcel Booking  
-**Current Branch:** `feature/phase-4-customers-booking` (Pending branch creation from `develop`)  
-**Base Branch:** `develop` (Up to date with Phase 3 fleet telematics merge `0c70a9f`)  
+**Current Branch:** `feature/phase-4-customers-booking`  
+**Base Branch:** `develop`  
 **Last Completed Phase:** Phase 3 — Fleet Management & Telematics  
-**Last Completed Story:** US-3-05 Fleet telematics map and maintenance alerts  
-**Next Story:** US-4-01 Customers, addresses schema & migrations  
+**Last Completed Story:** US-4-01 through US-4-05 Customer booking, state machine, QR identity, and tracking  
+**Next Story:** US-6-01 Courier dispatch, assignment engine, and atomic custody transactions (Phase 6)  
 **Mode:** AUTONOMOUS  
 
 ---

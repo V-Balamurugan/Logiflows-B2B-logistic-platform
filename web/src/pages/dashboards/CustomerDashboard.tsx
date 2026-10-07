@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   Package, Search, PlusCircle, Clock, CheckCircle2, ShieldCheck,
   MapPin, Truck, Box, FileText, ArrowRight,
-  Star, Bell, BarChart3, Route as RouteIcon
+  Star, BarChart3, Route as RouteIcon, BookOpen, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { DashboardLayout } from '../../components/DashboardLayout';
 import { getDirections, RouteResult } from '../../services/routingService';
+import { BookParcelModal } from '../../components/BookParcelModal';
+import { ParcelTrackerModal } from '../../components/ParcelTrackerModal';
+import { AddressBookView } from '../../components/AddressBookView';
 
 interface CustomerDashboardProps {
   onNavigate: (path: string) => void;
@@ -16,9 +19,9 @@ const NAV = [
   { icon: <BarChart3 className="w-4 h-4" />, label: 'Overview' },
   { icon: <Search className="w-4 h-4" />, label: 'Track Shipment' },
   { icon: <Package className="w-4 h-4" />, label: 'Book Delivery' },
-  { icon: <Clock className="w-4 h-4" />, label: 'Order History', badge: 5 },
+  { icon: <BookOpen className="w-4 h-4" />, label: 'Address Book' },
+  { icon: <Clock className="w-4 h-4" />, label: 'Order History' },
   { icon: <MapPin className="w-4 h-4" />, label: 'Serviceability' },
-  { icon: <Bell className="w-4 h-4" />, label: 'Notifications', badge: 2 },
 ];
 
 interface TimelineEvent {
@@ -64,6 +67,33 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
   const [serviceResult, setServiceResult] = useState<Record<string, string>>({});
   const [checkingZone, setCheckingZone] = useState<string | null>(null);
   const [liveRoute, setLiveRoute] = useState<RouteResult | null>(null);
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [isTrackerOpen, setIsTrackerOpen] = useState(false);
+  const [trackingSearchId, setTrackingSearchId] = useState('');
+  const [parcels, setParcels] = useState<any[]>([]);
+  const [loadingParcels, setLoadingParcels] = useState(false);
+
+  const fetchCustomerParcels = async () => {
+    if (!tokens?.access_token) return;
+    setLoadingParcels(true);
+    try {
+      const res = await fetch('/api/v1/parcels', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setParcels(data.data || []);
+      }
+    } catch (e) {
+      console.error('Error fetching parcels', e);
+    } finally {
+      setLoadingParcels(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomerParcels();
+  }, [tokens]);
 
   useEffect(() => {
     // Fetch live routing calculation for active shipment
@@ -182,7 +212,15 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
                   />
                 </div>
-                <button className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/30 transition-all">
+                <button
+                  onClick={() => {
+                    if (trackingInput.trim()) {
+                      setTrackingSearchId(trackingInput.trim());
+                      setIsTrackerOpen(true);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/30 transition-all"
+                >
                   Track
                 </button>
               </div>
@@ -290,12 +328,16 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
                 Generate secure QR identity, calculate dynamic pricing, and dispatch a courier to your pickup location.
               </p>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-500 font-mono flex items-center gap-2">
-                <Box className="w-3.5 h-3.5" />
-                Coming in Phase 4: Customer &amp; Parcel Booking
+              <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-900/60 text-[11px] text-indigo-300 font-mono flex items-center gap-2">
+                <Box className="w-3.5 h-3.5 text-indigo-400" />
+                Phase 4: Instant Consignment Booking Active
               </div>
-              <button className="mt-3 w-full py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 border border-slate-800 cursor-not-allowed opacity-70">
-                Coming Soon
+              <button
+                onClick={() => setIsBookingOpen(true)}
+                className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Book Delivery Now
               </button>
             </div>
 
@@ -340,43 +382,97 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
           </div>
         </div>
 
+        {/* Address Book Tab Content if Selected */}
+        {activeNav === 'Address Book' && (
+          <div className="glass-card rounded-2xl p-6 border border-slate-800">
+            <AddressBookView />
+          </div>
+        )}
+
         {/* Order History */}
         <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Order History</h2>
-            <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors font-semibold">View All →</button>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white">Your Consignments</h2>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                {parcels.length} active
+              </span>
+            </div>
+            <button
+              onClick={fetchCustomerParcels}
+              disabled={loadingParcels}
+              className="text-xs text-purple-400 hover:text-purple-300 transition-colors font-semibold flex items-center gap-1 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${loadingParcels ? 'animate-spin' : ''}`} /> Refresh
+            </button>
           </div>
           <div className="divide-y divide-slate-800/60">
-            {RECENT_ORDERS.map((order) => (
-              <div key={order.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
-                    <Package className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] font-bold text-indigo-400">{order.id}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[order.status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                        {order.status}
-                      </span>
+            {parcels.length > 0 ? (
+              parcels.map((p) => (
+                <div
+                  key={p.id}
+                  onClick={() => {
+                    setTrackingSearchId(p.tracking_number);
+                    setIsTrackerOpen(true);
+                  }}
+                  className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                      <Package className="w-4 h-4" />
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{order.destination} • {order.items} item{order.items > 1 ? 's' : ''}</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] font-bold text-indigo-400">{p.tracking_number}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[p.status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                          {p.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        To: {p.recipient_name} ({p.recipient_city}) • {p.weight_kg} kg • {p.service_type}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-emerald-400">₹{p.shipping_cost}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {new Date(p.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-white">{order.amount}</p>
-                  <p className="text-[11px] text-slate-500">{order.date}</p>
+              ))
+            ) : (
+              RECENT_ORDERS.map((order) => (
+                <div key={order.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] font-bold text-indigo-400">{order.id}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[order.status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{order.destination} • {order.items} item{order.items > 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-white">{order.amount}</p>
+                    <p className="text-[11px] text-slate-500">{order.date}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* Rating Banner */}
         <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 flex items-center justify-between">
           <div>
-            <p className="text-sm font-bold text-white">Rate your last delivery</p>
-            <p className="text-xs text-slate-400 mt-0.5">LF-8801-1123 delivered to Chennai</p>
+            <p className="text-sm font-bold text-white">Rate your logistics experience</p>
+            <p className="text-xs text-slate-400 mt-0.5">Authoritative B2B courier service</p>
           </div>
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
@@ -384,6 +480,18 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onNavigate
             ))}
           </div>
         </div>
+
+        {/* Modals */}
+        <BookParcelModal
+          isOpen={isBookingOpen}
+          onClose={() => setIsBookingOpen(false)}
+          onSuccess={() => fetchCustomerParcels()}
+        />
+        <ParcelTrackerModal
+          isOpen={isTrackerOpen}
+          onClose={() => setIsTrackerOpen(false)}
+          initialTrackingNumber={trackingSearchId}
+        />
 
       </div>
     </DashboardLayout>

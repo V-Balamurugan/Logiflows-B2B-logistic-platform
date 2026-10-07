@@ -18,6 +18,7 @@ import (
 	"logiflows/backend/internal/httpapi"
 	"logiflows/backend/internal/logging"
 	"logiflows/backend/internal/migrations"
+	"logiflows/backend/internal/parcel"
 	"logiflows/backend/internal/routing"
 	"logiflows/backend/internal/tenancy"
 	"logiflows/backend/internal/tracking"
@@ -83,6 +84,10 @@ func main() {
 	fleetRepo := fleet.NewPostgresRepository(db)
 	fleetService := fleet.NewService(fleetRepo, logger)
 
+	// Initialize Authoritative Parcel & Custody Service
+	parcelRepo := parcel.NewRepository(db)
+	parcelService := parcel.NewService(parcelRepo)
+
 	// Build Router
 	router := httpapi.BuildRouter(httpapi.ServerDeps{
 		Config:          cfg,
@@ -92,6 +97,7 @@ func main() {
 		AuthService:     authService,
 		TenancyService:  tenancyService,
 		FleetService:    fleetService,
+		ParcelService:   parcelService,
 		FirebaseService: firebaseService,
 		TrackingService: trackingService,
 		RoutingService:  routingService,
